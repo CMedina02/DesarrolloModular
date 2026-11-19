@@ -1,0 +1,23 @@
+-- Datos de demostración: NO crea cuentas ni contraseñas de acceso.
+-- Las cuentas se crearán desde la interfaz administrativa; el primer
+-- PLATFORM_ADMIN se inicializará con un comando seguro durante T04.
+-- Script idempotente para repetir solo sobre el esquema de desarrollo.
+BEGIN;
+INSERT INTO businesses (id, name) VALUES
+('10000000-0000-4000-8000-000000000001', 'Tlapalería Demostración'),
+('10000000-0000-4000-8000-000000000002', 'Papelería Demostración')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO categories (id, business_id, name) VALUES
+('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'Ferretería'),
+('20000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', 'Pinturas'),
+('20000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000002', 'Útiles escolares')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO products (id, business_id, category_id, sku, name, unit, cost_price, sale_price, min_stock) VALUES
+('30000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'TOR-001', 'Tornillo galvanizado 1/4', 'PZA', 1.30, 2.50, 10),
+('30000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'CAB-001', 'Cable eléctrico', 'M', 8.20, 14.00, 5.500),
+('30000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000002', 'PIN-001', 'Pintura blanca', 'L', 65.00, 95.00, 3.000),
+('30000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000003', 'LAP-001', 'Lápiz HB', 'PZA', 2.50, 5.00, 15)
+ON CONFLICT (id) DO NOTHING;
+COMMIT;

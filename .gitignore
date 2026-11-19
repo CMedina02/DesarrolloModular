@@ -1,0 +1,22 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dependencies
+node_modules/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Generated artifacts and temporary files
+dist/
+build/
+coverage/
+*.log
+*.tmp
+.DS_Store
+.vscode/
+.idea/

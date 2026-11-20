@@ -1,0 +1,1454 @@
+openapi: 3.1.0
+info:
+  title: DesarrolloModular API
+  version: 1.0.0-draft
+  description: |-
+    Contrato inicial de Core e Inventario Comercial 1.0 para una instalación. Representa identificadores como cadenas UUID y fechas como marcas de tiempo RFC 3339.
+
+    Cada operación protegida valida JWT, cuenta activa, rol y contexto. Un usuario de empresa solo accede a su business_id autorizado. Un recurso fuera de ese ámbito recibe 404. Las operaciones de Inventario también requieren empresa activa y módulo habilitado.
+
+    x-roles indica los roles admitidos. Las restricciones por empresa, tipo de movimiento y estado se aplican en el servidor. El cliente puede usar error.code para distinguir las categorías de error. La API recorta los espacios exteriores de los nombres, el correo y el SKU antes de validarlos. La contraseña se conserva tal como se recibe para verificarla o calcular su hash.
+
+    Las listas paginadas devuelven items, limit y offset. Empresas, usuarios, categorías y productos se ordenan por id ascendente. Una página con menos elementos que limit indica el fin de la lista.
+servers:
+- url: "/api/v1"
+  description: Base de la API en la instalación del cliente.
+security:
+- bearerAuth: []
+tags:
+- name: Autenticación
+  description: Inicio y consulta de sesión.
+- name: Empresas
+  description: Administración de empresas de la instalación.
+- name: Usuarios
+  description: Administración de cuentas de empresa.
+- name: Módulos
+  description: Disponibilidad de funcionalidades por empresa.
+- name: Inventario
+  description: Catálogo, existencias e historial.
+paths:
+  "/auth/login":
+    post:
+      tags:
+      - Autenticación
+      summary: Iniciar sesión
+      operationId: login
+      description: Devuelve un JWT y el perfil. Las credenciales incorrectas, una cuenta inactiva o una empresa inactiva tienen la misma respuesta 401.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/LoginRequest"
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/LoginResponse"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+  "/auth/me":
+    get:
+      tags:
+      - Autenticación
+      summary: Consultar el usuario autenticado
+      operationId: getAuthenticatedUser
+      description: El perfil incluye el rol y el business_id asociado. El business_id de PLATFORM_ADMIN es null. Una cuenta o empresa que se desactive después de emitir el JWT deja de tener una sesión válida.
+      x-roles:
+      - PLATFORM_ADMIN
+      - ADMIN
+      - EMPLOYEE
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/User"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+  "/businesses":
+    get:
+      tags:
+      - Empresas
+      summary: Listar empresas
+      operationId: listBusinesses
+      x-roles:
+      - PLATFORM_ADMIN
+      parameters:
+      - "$ref": "#/components/parameters/Limit"
+      - "$ref": "#/components/parameters/Offset"
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/BusinessList"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+    post:
+      tags:
+      - Empresas
+      summary: Registrar una empresa
+      operationId: createBusiness
+      description: La empresa se crea activa salvo que se indique lo contrario. La gestión del primer usuario ADMIN es una operación independiente.
+      x-roles:
+      - PLATFORM_ADMIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/BusinessCreate"
+      responses:
+        '201':
+          description: Recurso creado.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Business"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+  "/businesses/{business_id}":
+    parameters:
+    - "$ref": "#/components/parameters/BusinessId"
+    get:
+      tags:
+      - Empresas
+      summary: Consultar una empresa
+      operationId: getBusiness
+      description: ADMIN solo puede consultar su propia empresa. PLATFORM_ADMIN puede consultar cualquier empresa de la instalación.
+      x-roles:
+      - PLATFORM_ADMIN
+      - ADMIN
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Business"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+    patch:
+      tags:
+      - Empresas
+      summary: Actualizar el nombre o estado de una empresa
+      operationId: updateBusiness
+      description: La desactivación conserva los datos y revoca el acceso operativo de sus usuarios. PLATFORM_ADMIN puede consultar y reactivar la empresa.
+      x-roles:
+      - PLATFORM_ADMIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/BusinessUpdate"
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Business"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+  "/businesses/{business_id}/users":
+    parameters:
+    - "$ref": "#/components/parameters/BusinessId"
+    get:
+      tags:
+      - Usuarios
+      summary: Listar usuarios de una empresa
+      operationId: listUsers
+      description: PLATFORM_ADMIN puede listar ambas clases de cuentas de empresa. ADMIN solo puede gestionar y listar empleados de su propia empresa.
+      x-roles:
+      - PLATFORM_ADMIN
+      - ADMIN
+      parameters:
+      - "$ref": "#/components/parameters/Limit"
+      - "$ref": "#/components/parameters/Offset"
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/UserList"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+    post:
+      tags:
+      - Usuarios
+      summary: Crear un usuario de empresa
+      operationId: createUser
+      description: PLATFORM_ADMIN puede crear cuentas ADMIN o EMPLOYEE de la empresa. ADMIN solo puede crear EMPLOYEE de su propia empresa. El correo es único en toda la instalación. El servidor recibe la contraseña por HTTPS y conserva su hash.
+      x-roles:
+      - PLATFORM_ADMIN
+      - ADMIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/UserCreate"
+      responses:
+        '201':
+          description: Recurso creado.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/User"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '409':
+          "$ref": "#/components/responses/Conflict"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+  "/businesses/{business_id}/users/{user_id}":
+    parameters:
+    - "$ref": "#/components/parameters/BusinessId"
+    - "$ref": "#/components/parameters/UserId"
+    patch:
+      tags:
+      - Usuarios
+      summary: Actualizar un usuario de empresa
+      operationId: updateUser
+      description: PLATFORM_ADMIN puede modificar cuentas ADMIN o EMPLOYEE de la empresa. ADMIN solo puede modificar empleados propios y no puede promoverlos a ADMIN. Para conservar el historial se desactiva la cuenta con is_active. Este recurso no administra cuentas PLATFORM_ADMIN.
+      x-roles:
+      - PLATFORM_ADMIN
+      - ADMIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/UserUpdate"
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/User"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '409':
+          "$ref": "#/components/responses/Conflict"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+  "/businesses/{business_id}/modules":
+    parameters:
+    - "$ref": "#/components/parameters/BusinessId"
+    get:
+      tags:
+      - Módulos
+      summary: Consultar módulos de una empresa
+      operationId: listModules
+      description: Los usuarios de empresa pueden consultar los módulos de su propia empresa. PLATFORM_ADMIN puede consultar los de cualquier empresa de la instalación.
+      x-roles:
+      - PLATFORM_ADMIN
+      - ADMIN
+      - EMPLOYEE
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  "$ref": "#/components/schemas/Module"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+  "/businesses/{business_id}/modules/{module_key}":
+    parameters:
+    - "$ref": "#/components/parameters/BusinessId"
+    - name: module_key
+      in: path
+      required: true
+      description: Clave del módulo incluido en el MVP.
+      schema:
+        "$ref": "#/components/schemas/ModuleKey"
+    put:
+      tags:
+      - Módulos
+      summary: Establecer el estado de un módulo
+      operationId: setModuleEnabled
+      description: Operación idempotente. Cambia la disponibilidad para la empresa y conserva el catálogo y los movimientos. Puede preparar la configuración de una empresa inactiva.
+      x-roles:
+      - PLATFORM_ADMIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ModuleState"
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Module"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+  "/businesses/{business_id}/inventory/categories":
+    parameters:
+    - "$ref": "#/components/parameters/BusinessId"
+    get:
+      tags:
+      - Inventario
+      summary: Listar categorías
+      operationId: listCategories
+      x-roles:
+      - ADMIN
+      - EMPLOYEE
+      parameters:
+      - "$ref": "#/components/parameters/Limit"
+      - "$ref": "#/components/parameters/Offset"
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/CategoryList"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+    post:
+      tags:
+      - Inventario
+      summary: Crear una categoría
+      operationId: createCategory
+      description: El nombre debe ser único dentro de la empresa, sin distinguir mayúsculas.
+      x-roles:
+      - ADMIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/CategoryCreate"
+      responses:
+        '201':
+          description: Recurso creado.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Category"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '409':
+          "$ref": "#/components/responses/Conflict"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+  "/businesses/{business_id}/inventory/categories/{category_id}":
+    parameters:
+    - "$ref": "#/components/parameters/BusinessId"
+    - "$ref": "#/components/parameters/CategoryId"
+    get:
+      tags:
+      - Inventario
+      summary: Consultar una categoría
+      operationId: getCategory
+      x-roles:
+      - ADMIN
+      - EMPLOYEE
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Category"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+    patch:
+      tags:
+      - Inventario
+      summary: Cambiar el nombre de una categoría
+      operationId: updateCategory
+      description: El nombre debe ser único dentro de la empresa, sin distinguir mayúsculas.
+      x-roles:
+      - ADMIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/CategoryCreate"
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Category"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '409':
+          "$ref": "#/components/responses/Conflict"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+    delete:
+      tags:
+      - Inventario
+      summary: Eliminar una categoría sin productos
+      operationId: deleteCategory
+      description: Devuelve 409 si la categoría tiene productos asociados, incluso si están inactivos.
+      x-roles:
+      - ADMIN
+      responses:
+        '204':
+          description: Operación completada.
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '409':
+          "$ref": "#/components/responses/Conflict"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+  "/businesses/{business_id}/inventory/products":
+    parameters:
+    - "$ref": "#/components/parameters/BusinessId"
+    get:
+      tags:
+      - Inventario
+      summary: Listar productos
+      operationId: listProducts
+      x-roles:
+      - ADMIN
+      - EMPLOYEE
+      parameters:
+      - "$ref": "#/components/parameters/Limit"
+      - "$ref": "#/components/parameters/Offset"
+      - name: category_id
+        in: query
+        description: Restringe el resultado a una categoría de la empresa.
+        schema:
+          "$ref": "#/components/schemas/Uuid"
+      - name: is_active
+        in: query
+        description: Filtra por estado. EMPLOYEE solo puede consultar productos activos.
+        schema:
+          type: boolean
+      - name: low_stock
+        in: query
+        description: Si es true, devuelve solo productos con existencia menor o igual que el mínimo.
+        schema:
+          type: boolean
+          default: false
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ProductList"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+    post:
+      tags:
+      - Inventario
+      summary: Crear un producto con existencia cero
+      operationId: createProduct
+      description: El SKU es único por empresa sin distinguir mayúsculas. La categoría debe pertenecer a la empresa. La existencia inicial se registra después con una entrada.
+      x-roles:
+      - ADMIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ProductCreate"
+      responses:
+        '201':
+          description: Recurso creado.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Product"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '409':
+          "$ref": "#/components/responses/Conflict"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+  "/businesses/{business_id}/inventory/products/{product_id}":
+    parameters:
+    - "$ref": "#/components/parameters/BusinessId"
+    - "$ref": "#/components/parameters/ProductId"
+    get:
+      tags:
+      - Inventario
+      summary: Consultar un producto
+      operationId: getProduct
+      description: EMPLOYEE solo puede consultar productos activos.
+      x-roles:
+      - ADMIN
+      - EMPLOYEE
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Product"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+    patch:
+      tags:
+      - Inventario
+      summary: Actualizar o desactivar un producto
+      operationId: updateProduct
+      description: La desactivación conserva el producto y su historial. Si existen movimientos del producto, un cambio de unidad devuelve 409 para conservar el significado de las cantidades históricas. El stock se modifica mediante movimientos.
+      x-roles:
+      - ADMIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ProductUpdate"
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Product"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '409':
+          "$ref": "#/components/responses/Conflict"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+  "/businesses/{business_id}/inventory/movements":
+    parameters:
+    - "$ref": "#/components/parameters/BusinessId"
+    get:
+      tags:
+      - Inventario
+      summary: Consultar el historial de inventario
+      operationId: listMovements
+      description: Orden descendente por created_at y, en caso de empate, por id.
+      x-roles:
+      - ADMIN
+      parameters:
+      - "$ref": "#/components/parameters/Limit"
+      - "$ref": "#/components/parameters/Offset"
+      - name: product_id
+        in: query
+        description: Filtra por producto de la empresa, incluso si está inactivo.
+        schema:
+          "$ref": "#/components/schemas/Uuid"
+      - name: movement_type
+        in: query
+        description: Filtra por tipo de movimiento.
+        schema:
+          "$ref": "#/components/schemas/MovementType"
+      - name: from
+        in: query
+        description: Fecha y hora de inicio, inclusiva.
+        schema:
+          "$ref": "#/components/schemas/Timestamp"
+      - name: to
+        in: query
+        description: Fecha y hora de fin, exclusiva y posterior a from cuando ambos se indican.
+        schema:
+          "$ref": "#/components/schemas/Timestamp"
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/MovementList"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+    post:
+      tags:
+      - Inventario
+      summary: Registrar una entrada, salida o ajuste
+      operationId: createMovement
+      description: ADMIN y EMPLOYEE pueden registrar IN y OUT. Solo ADMIN puede registrar ADJUSTMENT. El servidor toma user_id de la sesión, deriva el delta y persiste existencias e historial en una transacción. Devuelve 409 por producto inactivo, stock insuficiente, falta de cambio en un ajuste o existencia fuera del rango admitido.
+      x-roles:
+      - ADMIN
+      - EMPLOYEE
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/MovementCreate"
+      responses:
+        '201':
+          description: Recurso creado.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Movement"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '401':
+          "$ref": "#/components/responses/Unauthorized"
+        '403':
+          "$ref": "#/components/responses/Forbidden"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '409':
+          "$ref": "#/components/responses/Conflict"
+        '500':
+          "$ref": "#/components/responses/InternalError"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    BusinessId:
+      name: business_id
+      in: path
+      required: true
+      schema:
+        "$ref": "#/components/schemas/Uuid"
+    UserId:
+      name: user_id
+      in: path
+      required: true
+      schema:
+        "$ref": "#/components/schemas/Uuid"
+    CategoryId:
+      name: category_id
+      in: path
+      required: true
+      schema:
+        "$ref": "#/components/schemas/Uuid"
+    ProductId:
+      name: product_id
+      in: path
+      required: true
+      schema:
+        "$ref": "#/components/schemas/Uuid"
+    Limit:
+      name: limit
+      in: query
+      description: Número máximo de elementos en la página.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+    Offset:
+      name: offset
+      in: query
+      description: Número de elementos que se omiten antes de la página.
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+  responses:
+    BadRequest:
+      description: Solicitud inválida, incluidos campos, formatos o cantidades incompatibles con la unidad.
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/Error"
+          example:
+            error:
+              code: VALIDATION_ERROR
+              message: Revisa los datos de la solicitud.
+    Unauthorized:
+      description: Faltan credenciales válidas o la sesión dejó de ser válida.
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/Error"
+          example:
+            error:
+              code: UNAUTHENTICATED
+              message: Credenciales o sesión no válidas.
+    Forbidden:
+      description: Una sesión válida carece del rol necesario o Inventario está deshabilitado para la empresa.
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/Error"
+          example:
+            error:
+              code: FORBIDDEN
+              message: La operación no está disponible para la sesión actual.
+    NotFound:
+      description: El recurso no existe en el contexto que el usuario puede consultar.
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/Error"
+          example:
+            error:
+              code: NOT_FOUND
+              message: No se encontró el recurso.
+    Conflict:
+      description: El estado de los datos impide completar la operación.
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/Error"
+          example:
+            error:
+              code: CONFLICT
+              message: La operación entra en conflicto con el estado actual.
+    InternalError:
+      description: Error inesperado. La respuesta no expone SQL ni detalles internos.
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/Error"
+          example:
+            error:
+              code: INTERNAL_ERROR
+              message: No se pudo completar la operación.
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+    Timestamp:
+      type: string
+      format: date-time
+    Role:
+      type: string
+      enum:
+      - PLATFORM_ADMIN
+      - ADMIN
+      - EMPLOYEE
+    ModuleKey:
+      type: string
+      enum:
+      - inventory
+    Unit:
+      type: string
+      enum:
+      - PZA
+      - CAJA
+      - KG
+      - M
+      - L
+    MovementType:
+      type: string
+      enum:
+      - IN
+      - OUT
+      - ADJUSTMENT
+    Price:
+      type: string
+      pattern: "^(0|[1-9][0-9]{0,9})(\\.[0-9]{1,2})?$"
+      description: Decimal no negativo compatible con NUMERIC(12,2). Las respuestas incluyen dos decimales.
+      examples:
+      - '8.20'
+    Quantity:
+      type: string
+      pattern: "^(0|[1-9][0-9]{0,10})(\\.[0-9]{1,3})?$"
+      description: Decimal no negativo compatible con NUMERIC(14,3). Las respuestas incluyen tres decimales. PZA y CAJA solo admiten valores enteros.
+      examples:
+      - '5.500'
+      - '12.000'
+    PositiveQuantity:
+      allOf:
+      - "$ref": "#/components/schemas/Quantity"
+      - not:
+          pattern: "^0(\\.0{1,3})?$"
+      description: Cantidad estrictamente mayor que cero.
+    SignedQuantity:
+      type: string
+      pattern: "^-?(0|[1-9][0-9]{0,10})(\\.[0-9]{1,3})?$"
+      not:
+        pattern: "^-?0(\\.0{1,3})?$"
+      description: Delta distinto de cero. Las respuestas incluyen tres decimales.
+      examples:
+      - "-3.250"
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - email
+      - password
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        password:
+          type: string
+          minLength: 1
+          writeOnly: true
+    LoginResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - access_token
+      - token_type
+      - expires_in
+      - user
+      properties:
+        access_token:
+          type: string
+          minLength: 1
+        token_type:
+          const: Bearer
+        expires_in:
+          type: integer
+          minimum: 1
+          description: Vigencia del token en segundos.
+        user:
+          "$ref": "#/components/schemas/User"
+    Business:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - name
+      - is_active
+      - created_at
+      - updated_at
+      properties:
+        id:
+          "$ref": "#/components/schemas/Uuid"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+          pattern: "\\S"
+        is_active:
+          type: boolean
+        created_at:
+          "$ref": "#/components/schemas/Timestamp"
+        updated_at:
+          "$ref": "#/components/schemas/Timestamp"
+    BusinessCreate:
+      type: object
+      additionalProperties: false
+      required:
+      - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+          pattern: "\\S"
+        is_active:
+          type: boolean
+    BusinessUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+          pattern: "\\S"
+        is_active:
+          type: boolean
+      minProperties: 1
+    BusinessList:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - limit
+      - offset
+      properties:
+        items:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Business"
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        offset:
+          type: integer
+          minimum: 0
+    User:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - business_id
+      - name
+      - email
+      - role
+      - is_active
+      - created_at
+      - updated_at
+      properties:
+        id:
+          "$ref": "#/components/schemas/Uuid"
+        business_id:
+          anyOf:
+          - "$ref": "#/components/schemas/Uuid"
+          - type: 'null'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+          pattern: "\\S"
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        role:
+          "$ref": "#/components/schemas/Role"
+        is_active:
+          type: boolean
+        created_at:
+          "$ref": "#/components/schemas/Timestamp"
+        updated_at:
+          "$ref": "#/components/schemas/Timestamp"
+    UserCreate:
+      type: object
+      additionalProperties: false
+      required:
+      - name
+      - email
+      - role
+      - password
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+          pattern: "\\S"
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        role:
+          type: string
+          enum:
+          - ADMIN
+          - EMPLOYEE
+        is_active:
+          type: boolean
+        password:
+          type: string
+          minLength: 1
+          writeOnly: true
+    UserUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+          pattern: "\\S"
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        role:
+          type: string
+          enum:
+          - ADMIN
+          - EMPLOYEE
+        is_active:
+          type: boolean
+      minProperties: 1
+    UserList:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - limit
+      - offset
+      properties:
+        items:
+          type: array
+          items:
+            "$ref": "#/components/schemas/User"
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        offset:
+          type: integer
+          minimum: 0
+    Module:
+      type: object
+      additionalProperties: false
+      required:
+      - key
+      - enabled
+      properties:
+        key:
+          "$ref": "#/components/schemas/ModuleKey"
+        enabled:
+          type: boolean
+    ModuleState:
+      type: object
+      additionalProperties: false
+      required:
+      - enabled
+      properties:
+        enabled:
+          type: boolean
+    Category:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - business_id
+      - name
+      - created_at
+      - updated_at
+      properties:
+        id:
+          "$ref": "#/components/schemas/Uuid"
+        business_id:
+          "$ref": "#/components/schemas/Uuid"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: "\\S"
+        created_at:
+          "$ref": "#/components/schemas/Timestamp"
+        updated_at:
+          "$ref": "#/components/schemas/Timestamp"
+    CategoryCreate:
+      type: object
+      additionalProperties: false
+      required:
+      - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: "\\S"
+    CategoryList:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - limit
+      - offset
+      properties:
+        items:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Category"
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        offset:
+          type: integer
+          minimum: 0
+    Product:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - business_id
+      - category_id
+      - sku
+      - name
+      - unit
+      - cost_price
+      - sale_price
+      - min_stock
+      - is_active
+      - stock_quantity
+      - created_at
+      - updated_at
+      properties:
+        id:
+          "$ref": "#/components/schemas/Uuid"
+        business_id:
+          "$ref": "#/components/schemas/Uuid"
+        category_id:
+          "$ref": "#/components/schemas/Uuid"
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 60
+          pattern: "\\S"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 180
+          pattern: "\\S"
+        unit:
+          "$ref": "#/components/schemas/Unit"
+        cost_price:
+          "$ref": "#/components/schemas/Price"
+        sale_price:
+          "$ref": "#/components/schemas/Price"
+        min_stock:
+          "$ref": "#/components/schemas/Quantity"
+        is_active:
+          type: boolean
+        stock_quantity:
+          "$ref": "#/components/schemas/Quantity"
+          readOnly: true
+        created_at:
+          "$ref": "#/components/schemas/Timestamp"
+        updated_at:
+          "$ref": "#/components/schemas/Timestamp"
+    ProductCreate:
+      type: object
+      additionalProperties: false
+      required:
+      - category_id
+      - sku
+      - name
+      - unit
+      properties:
+        category_id:
+          "$ref": "#/components/schemas/Uuid"
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 60
+          pattern: "\\S"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 180
+          pattern: "\\S"
+        unit:
+          "$ref": "#/components/schemas/Unit"
+        cost_price:
+          "$ref": "#/components/schemas/Price"
+        sale_price:
+          "$ref": "#/components/schemas/Price"
+        min_stock:
+          "$ref": "#/components/schemas/Quantity"
+        is_active:
+          type: boolean
+    ProductUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        category_id:
+          "$ref": "#/components/schemas/Uuid"
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 60
+          pattern: "\\S"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 180
+          pattern: "\\S"
+        unit:
+          "$ref": "#/components/schemas/Unit"
+        cost_price:
+          "$ref": "#/components/schemas/Price"
+        sale_price:
+          "$ref": "#/components/schemas/Price"
+        min_stock:
+          "$ref": "#/components/schemas/Quantity"
+        is_active:
+          type: boolean
+      minProperties: 1
+    ProductList:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - limit
+      - offset
+      properties:
+        items:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Product"
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        offset:
+          type: integer
+          minimum: 0
+    Movement:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - business_id
+      - product_id
+      - user_id
+      - movement_type
+      - quantity_delta
+      - stock_before
+      - stock_after
+      - reason
+      - created_at
+      properties:
+        id:
+          "$ref": "#/components/schemas/Uuid"
+        business_id:
+          "$ref": "#/components/schemas/Uuid"
+        product_id:
+          "$ref": "#/components/schemas/Uuid"
+        user_id:
+          "$ref": "#/components/schemas/Uuid"
+        movement_type:
+          "$ref": "#/components/schemas/MovementType"
+        quantity_delta:
+          "$ref": "#/components/schemas/SignedQuantity"
+        stock_before:
+          "$ref": "#/components/schemas/Quantity"
+        stock_after:
+          "$ref": "#/components/schemas/Quantity"
+        reason:
+          type:
+          - string
+          - 'null'
+        created_at:
+          "$ref": "#/components/schemas/Timestamp"
+    MovementList:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - limit
+      - offset
+      properties:
+        items:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Movement"
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        offset:
+          type: integer
+          minimum: 0
+    MovementCreate:
+      oneOf:
+      - "$ref": "#/components/schemas/StockEntry"
+      - "$ref": "#/components/schemas/StockExit"
+      - "$ref": "#/components/schemas/StockAdjustment"
+    StockEntry:
+      type: object
+      additionalProperties: false
+      required:
+      - movement_type
+      - product_id
+      - quantity
+      properties:
+        movement_type:
+          const: IN
+        product_id:
+          "$ref": "#/components/schemas/Uuid"
+        quantity:
+          "$ref": "#/components/schemas/PositiveQuantity"
+        reason:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+    StockExit:
+      type: object
+      additionalProperties: false
+      required:
+      - movement_type
+      - product_id
+      - quantity
+      - reason
+      properties:
+        movement_type:
+          const: OUT
+        product_id:
+          "$ref": "#/components/schemas/Uuid"
+        quantity:
+          "$ref": "#/components/schemas/PositiveQuantity"
+        reason:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+    StockAdjustment:
+      type: object
+      additionalProperties: false
+      required:
+      - movement_type
+      - product_id
+      - counted_quantity
+      - reason
+      properties:
+        movement_type:
+          const: ADJUSTMENT
+        product_id:
+          "$ref": "#/components/schemas/Uuid"
+        counted_quantity:
+          "$ref": "#/components/schemas/Quantity"
+        reason:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+    Error:
+      type: object
+      additionalProperties: false
+      required:
+      - error
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+          - code
+          - message
+          properties:
+            code:
+              type: string
+            message:
+              type: string

@@ -38,6 +38,39 @@ http.Response _loginSuccessResponse({
   );
 }
 
+MockClient _roleMockClient({
+  required String role,
+  String? businessId,
+  bool inventoryEnabled = true,
+}) {
+  return MockClient((request) async {
+    if (request.url.path == '/api/v1/auth/login') {
+      return _loginSuccessResponse(role: role, businessId: businessId);
+    }
+    if (request.url.path == '/api/v1/businesses') {
+      return http.Response(
+        jsonEncode({'items': [], 'limit': 25, 'offset': 0}),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+    if (request.url.path.endsWith('/modules')) {
+      return http.Response(
+        jsonEncode([
+          {'key': 'inventory', 'enabled': inventoryEnabled},
+        ]),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+    return http.Response(
+      jsonEncode({'items': [], 'limit': 25, 'offset': 0}),
+      200,
+      headers: {'content-type': 'application/json'},
+    );
+  });
+}
+
 void main() {
   final testConfig = AppConfig.fromValues(
     rawApiBaseUrl: 'http://127.0.0.1:3000',
@@ -102,12 +135,21 @@ void main() {
     testWidgets('doble toque durante login pendiente genera una sola solicitud', (
       tester,
     ) async {
-      var calls = 0;
+      var loginCalls = 0;
       final completer = Completer<http.Response>();
 
-      final client = MockClient((request) {
-        calls++;
-        return completer.future;
+      final client = MockClient((request) async {
+        if (request.url.path == '/api/v1/auth/login') {
+          loginCalls++;
+          return completer.future;
+        }
+        return http.Response(
+          jsonEncode([
+            {'key': 'inventory', 'enabled': true},
+          ]),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
       });
 
       await pumpApp(tester, client: client);
@@ -127,7 +169,7 @@ void main() {
       await tester.tap(submitBtn, warnIfMissed: false);
       await tester.pump();
 
-      expect(calls, 1);
+      expect(loginCalls, 1);
 
       completer.complete(
         _loginSuccessResponse(
@@ -143,9 +185,7 @@ void main() {
     testWidgets('PLATFORM_ADMIN llega a administración de instalación', (
       tester,
     ) async {
-      final client = MockClient((request) async {
-        return _loginSuccessResponse(role: 'PLATFORM_ADMIN', businessId: null);
-      });
+      final client = _roleMockClient(role: 'PLATFORM_ADMIN', businessId: null);
 
       await pumpApp(tester, client: client);
       await tester.enterText(
@@ -169,12 +209,10 @@ void main() {
     testWidgets('EMPLOYEE ve sus funciones y no tiene Historial ni Empleados', (
       tester,
     ) async {
-      final client = MockClient((request) async {
-        return _loginSuccessResponse(
-          role: 'EMPLOYEE',
-          businessId: '22222222-2222-4222-8222-222222222222',
-        );
-      });
+      final client = _roleMockClient(
+        role: 'EMPLOYEE',
+        businessId: '22222222-2222-4222-8222-222222222222',
+      );
 
       await pumpApp(tester, client: client);
       await tester.enterText(
@@ -200,12 +238,10 @@ void main() {
     testWidgets('cerrar sesión vuelve al login y bloquea regreso a pantallas privadas', (
       tester,
     ) async {
-      final client = MockClient((request) async {
-        return _loginSuccessResponse(
-          role: 'ADMIN',
-          businessId: '22222222-2222-4222-8222-222222222222',
-        );
-      });
+      final client = _roleMockClient(
+        role: 'ADMIN',
+        businessId: '22222222-2222-4222-8222-222222222222',
+      );
 
       await pumpApp(tester, client: client);
       await tester.enterText(

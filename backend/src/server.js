@@ -1,12 +1,20 @@
 import { once } from "node:events";
 import { createServer } from "node:http";
 import { createApp } from "./app.js";
-import { readConfig } from "./core/config.js";
+import { createAccessTokens } from "./core/auth/token.js";
+import { createAuthUsers } from "./core/auth/users.js";
+import { readConfig, readJwtSecret } from "./core/config.js";
 import { checkDatabase, createPool } from "./core/database/pool.js";
 
-async function startServer({ host, port, databaseUrl }) {
+async function startServer({ host, port, databaseUrl, jwtSecret }) {
   const pool = createPool(databaseUrl);
-  const app = createApp({ checkDatabase: () => checkDatabase(pool) });
+  const app = createApp({
+    checkDatabase: () => checkDatabase(pool),
+    auth: {
+      users: createAuthUsers(pool),
+      tokens: createAccessTokens(jwtSecret),
+    },
+  });
   const server = createServer(app);
 
   try {
@@ -45,7 +53,7 @@ async function startServer({ host, port, databaseUrl }) {
 
 let config;
 try {
-  config = readConfig();
+  config = { ...readConfig(), jwtSecret: readJwtSecret() };
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;

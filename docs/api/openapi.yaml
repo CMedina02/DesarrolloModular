@@ -33,7 +33,10 @@ paths:
       - Autenticación
       summary: Iniciar sesión
       operationId: login
-      description: Devuelve un JWT y el perfil. Las credenciales incorrectas, una cuenta inactiva o una empresa inactiva tienen la misma respuesta 401.
+      description: >-
+        Devuelve un JWT válido durante 900 segundos y el perfil. Las credenciales incorrectas,
+        una cuenta inactiva o una empresa inactiva tienen la misma respuesta 401.
+        Acepta hasta 4 KiB de JSON sin compresión y aplica un límite de 10 solicitudes por IP por minuto.
       security: []
       requestBody:
         required: true
@@ -52,6 +55,12 @@ paths:
           "$ref": "#/components/responses/BadRequest"
         '401':
           "$ref": "#/components/responses/Unauthorized"
+        '413':
+          "$ref": "#/components/responses/PayloadTooLarge"
+        '415':
+          "$ref": "#/components/responses/UnsupportedMediaType"
+        '429':
+          "$ref": "#/components/responses/TooManyRequests"
         '500':
           "$ref": "#/components/responses/InternalError"
   "/auth/me":
@@ -843,6 +852,42 @@ components:
             error:
               code: CONFLICT
               message: La operación entra en conflicto con el estado actual.
+    PayloadTooLarge:
+      description: El cuerpo de la solicitud supera el máximo permitido.
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/Error"
+          example:
+            error:
+              code: PAYLOAD_TOO_LARGE
+              message: El cuerpo supera el tamaño permitido.
+    UnsupportedMediaType:
+      description: La solicitud debe enviarse como application/json sin compresión.
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/Error"
+          example:
+            error:
+              code: UNSUPPORTED_MEDIA_TYPE
+              message: Envía JSON sin compresión en application/json.
+    TooManyRequests:
+      description: La IP superó el límite de solicitudes de inicio de sesión.
+      headers:
+        Retry-After:
+          description: Segundos restantes para volver a intentarlo.
+          schema:
+            type: integer
+            minimum: 0
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/Error"
+          example:
+            error:
+              code: TOO_MANY_REQUESTS
+              message: Demasiados intentos. Vuelve a intentarlo más tarde.
     InternalError:
       description: Error inesperado. La respuesta no expone SQL ni detalles internos.
       content:
@@ -925,6 +970,7 @@ components:
         password:
           type: string
           minLength: 1
+          maxLength: 256
           writeOnly: true
     LoginResponse:
       type: object

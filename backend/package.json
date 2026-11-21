@@ -8,10 +8,13 @@
   },
   "scripts": {
     "start": "node --env-file-if-exists=.env src/server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "bootstrap:admin": "node --env-file-if-exists=.env scripts/bootstrap-admin.js"
   },
   "dependencies": {
     "express": "^5.1.0",
+    "express-rate-limit": "^8.7.5",
+    "jose": "^6.2.18",
     "pg": "^8.16.0"
   }
 }

@@ -10,6 +10,10 @@ export function readConfig(env = process.env) {
     throw new Error("PORT debe ser un entero entre 1 y 65535.");
   }
 
+  return { host, port, databaseUrl: readDatabaseUrl(env) };
+}
+
+export function readDatabaseUrl(env = process.env) {
   const databaseUrl = env.DATABASE_URL?.trim();
   const parsedUrl = URL.parse(databaseUrl ?? "");
   if (
@@ -21,5 +25,14 @@ export function readConfig(env = process.env) {
     throw new Error("DATABASE_URL debe ser una URL de PostgreSQL con servidor y base de datos.");
   }
 
-  return { host, port, databaseUrl };
+  return databaseUrl;
+}
+
+export function readJwtSecret(env = process.env) {
+  const secret = env.JWT_SECRET;
+  if (secret?.length !== 64 || !/^[0-9a-f]+$/i.test(secret)) {
+    throw new Error("JWT_SECRET debe contener 32 bytes en formato hexadecimal.");
+  }
+
+  return Buffer.from(secret, "hex");
 }

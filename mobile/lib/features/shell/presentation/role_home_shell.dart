@@ -8,6 +8,7 @@ import 'package:inventario_comercial/features/admin/presentation/modules_screen.
 import 'package:inventario_comercial/features/admin/presentation/users_screen.dart';
 import 'package:inventario_comercial/features/auth/application/auth_controller.dart';
 import 'package:inventario_comercial/features/categories/presentation/categories_screen.dart';
+import 'package:inventario_comercial/features/products/presentation/products_screen.dart';
 import 'package:inventario_comercial/features/shell/presentation/role_navigation.dart';
 
 /// Authenticated shell displaying only the destinations permitted for [user.role].
@@ -59,6 +60,16 @@ class _RoleHomeShellState extends ConsumerState<RoleHomeShell> {
           child: CategoriesScreen(currentUser: widget.user),
         );
       case AppDestinationId.products:
+        final businessId = widget.user.businessId;
+        if (businessId == null) {
+          return const Center(
+            child: Text('Tu cuenta no tiene una empresa asociada.'),
+          );
+        }
+        return _InventoryModuleGate(
+          businessId: businessId,
+          child: ProductsScreen(currentUser: widget.user),
+        );
       case AppDestinationId.movements:
       case AppDestinationId.history:
         final businessId = widget.user.businessId;

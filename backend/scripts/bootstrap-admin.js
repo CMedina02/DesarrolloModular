@@ -1,8 +1,9 @@
 import { insertFirstAdministrator } from "../src/core/auth/bootstrap.js";
 import { normalizeEmail } from "../src/core/auth/input.js";
-import { hashPassword, isValidPassword } from "../src/core/auth/password.js";
+import { hashPassword, isValidPassword, minimumNewPasswordLength } from "../src/core/auth/password.js";
 import { readDatabaseUrl } from "../src/core/config.js";
 import { createPool } from "../src/core/database/pool.js";
+import { normalizeName } from "../src/core/validation.js";
 
 async function readPassword(input) {
   const chunks = [];
@@ -19,7 +20,7 @@ async function readPassword(input) {
   const password = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true })
     .decode(Buffer.concat(chunks))
     .replace(/\r?\n$/, "");
-  if (/[\r\n]/.test(password) || !isValidPassword(password, 15)) {
+  if (/[\r\n]/.test(password) || !isValidPassword(password, minimumNewPasswordLength)) {
     throw new Error("La contraseña debe tener entre 15 y 256 caracteres en una sola línea.");
   }
 
@@ -28,13 +29,10 @@ async function readPassword(input) {
 
 async function main(args, input) {
   const [rawName, rawEmail] = args;
-  const name = rawName?.trim();
+  const name = normalizeName(rawName, 150);
   const email = normalizeEmail(rawEmail);
 
-  if (
-    args.length !== 2 || !name || !name.isWellFormed() ||
-    Array.from(name).length > 150 || name.includes("\0") || !email || input.isTTY
-  ) {
+  if (args.length !== 2 || !name || !email || input.isTTY) {
     console.error('Usa npm run bootstrap:admin -- "Nombre" "correo" y envía la contraseña por stdin.');
     return 1;
   }

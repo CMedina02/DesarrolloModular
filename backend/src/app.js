@@ -1,5 +1,7 @@
 import express from "express";
 import { createAuthRouter } from "./core/auth/routes.js";
+import { createRequireSession } from "./core/auth/session.js";
+import { createBusinessRouter } from "./core/businesses/routes.js";
 import { sendError } from "./core/http/errors.js";
 
 const bodyErrors = {
@@ -10,7 +12,7 @@ const bodyErrors = {
   "encoding.unsupported": [415, "UNSUPPORTED_MEDIA_TYPE", "Envía JSON sin compresión en application/json."],
 };
 
-export function createApp({ checkDatabase, auth }) {
+export function createApp({ checkDatabase, auth, businesses, businessUsers }) {
   const app = express();
   app.disable("x-powered-by");
 
@@ -30,7 +32,9 @@ export function createApp({ checkDatabase, auth }) {
     return response.json({ status: "ok" });
   });
 
-  app.use("/api/v1/auth", createAuthRouter(auth));
+  const requireSession = createRequireSession(auth);
+  app.use("/api/v1/auth", createAuthRouter(auth, requireSession));
+  app.use("/api/v1/businesses", createBusinessRouter({ businesses, businessUsers, requireSession }));
 
   app.use((_request, response) =>
     sendError(response, 404, "NOT_FOUND", "No se encontró el recurso.")

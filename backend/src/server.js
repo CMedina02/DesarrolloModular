@@ -3,13 +3,17 @@ import { createServer } from "node:http";
 import { createApp } from "./app.js";
 import { createAccessTokens } from "./core/auth/token.js";
 import { createAuthUsers } from "./core/auth/users.js";
+import { createBusinesses } from "./core/businesses/repository.js";
 import { readConfig, readJwtSecret } from "./core/config.js";
 import { checkDatabase, createPool } from "./core/database/pool.js";
+import { createBusinessUsers } from "./core/users/repository.js";
 
 async function startServer({ host, port, databaseUrl, jwtSecret }) {
   const pool = createPool(databaseUrl);
   const app = createApp({
     checkDatabase: () => checkDatabase(pool),
+    businesses: createBusinesses(pool),
+    businessUsers: createBusinessUsers(pool),
     auth: {
       users: createAuthUsers(pool),
       tokens: createAccessTokens(jwtSecret),

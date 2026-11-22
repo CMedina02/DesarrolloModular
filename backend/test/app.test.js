@@ -6,8 +6,8 @@ import { createApp } from "../src/app.js";
 import { hashPassword } from "../src/core/auth/password.js";
 import { createAccessTokens } from "../src/core/auth/token.js";
 
-async function listen(t, checkDatabase, auth = { users: {}, tokens: {} }) {
-  const server = createServer(createApp({ checkDatabase, auth }));
+async function listen(t, checkDatabase, auth = { users: {}, tokens: {} }, administration = {}) {
+  const server = createServer(createApp({ checkDatabase, auth, ...administration }));
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
 
@@ -178,4 +178,129 @@ test("/me rechaza tokens faltantes o inválidos antes de consultar la sesión", 
     await response.text();
   }
   assert.equal(users.findById.mock.callCount(), 0);
+});
+
+const companyId = "be6f55c3-8053-409d-8a40-2bebbc461551";
+const otherCompanyId = "2b2c32ce-89bd-4153-b287-299880bb411e";
+const employeeId = "f2d8afb5-6f6b-4eb9-b7e7-c590a2bbfbae";
+const businessesPath = "/api/v1/businesses";
+
+async function administrationClient(t, role, administration) {
+  const profile = {
+    ...userProfile,
+    role,
+    business_id: role === "PLATFORM_ADMIN" ? null : companyId,
+  };
+  const tokens = createAccessTokens(Buffer.alloc(32, 21));
+  const baseUrl = await listen(t, async () => {}, { tokens, users: { findById: async () => profile } }, administration);
+  const token = await tokens.issue(profile.id);
+  return (path, { method = "GET", body } = {}) => fetch(baseUrl + businessesPath + path, {
+    method,
+    headers: {
+      authorization: `Bearer ${token}`,
+      ...(body !== undefined && { "content-type": "application/json" }),
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+test("administración exige sesión y EMPLOYEE recibe 403", async (t) => {
+  const baseUrl = await listen(t, async () => {});
+  const anonymous = await fetch(baseUrl + businessesPath);
+  assert.equal(anonymous.status, 401);
+  assert.equal(anonymous.headers.get("www-authenticate"), "Bearer");
+
+  const client = await administrationClient(t, "EMPLOYEE", {});
+  for (const path of ["/", `/${companyId}`, `/${companyId}/users`]) {
+    const response = await client(path);
+    assert.equal(response.status, 403);
+    assert.equal((await response.json()).error.code, "FORBIDDEN");
+  }
+});
+
+test("ADMIN solo consulta su empresa y opera cuentas EMPLOYEE", async (t) => {
+  const findById = t.mock.fn(async () => ({ id: companyId }));
+  const list = t.mock.fn(async () => [{ id: employeeId, role: "EMPLOYEE" }]);
+  const update = t.mock.fn(async () => undefined);
+  const client = await administrationClient(t, "ADMIN", {
+    businesses: { findById },
+    businessUsers: { list, update },
+  });
+
+  for (const [path, options] of [
+    [`/${otherCompanyId}`, {}],
+    [`/${otherCompanyId}/users`, {}],
+    [`/${otherCompanyId}/users/${employeeId}`, { method: "PATCH", body: { is_active: false } }],
+  ]) {
+    const response = await client(path, options);
+    assert.equal(response.status, 404);
+    await response.text();
+  }
+  assert.equal(findById.mock.callCount(), 0);
+  assert.equal(update.mock.callCount(), 0);
+  assert.equal((await client(`/${companyId}`, { method: "PATCH", body: { name: "Sin permiso" } })).status, 403);
+  assert.equal((await client("/no-es-uuid")).status, 400);
+
+  const own = await client(`/${companyId.toUpperCase()}`);
+  assert.equal(own.status, 200);
+  assert.deepEqual(await own.json(), { id: companyId });
+
+  const users = await client(`/${companyId}/users?limit=5&offset=2`);
+  assert.deepEqual(await users.json(), { items: [{ id: employeeId, role: "EMPLOYEE" }], limit: 5, offset: 2 });
+  assert.deepEqual(list.mock.calls[0].arguments, [companyId, false, { limit: 5, offset: 2 }]);
+
+  const rolesPath = `/${companyId}/users/${employeeId}`;
+  assert.equal((await client(rolesPath, { method: "PATCH", body: { role: "ADMIN" } })).status, 403);
+  assert.equal((await client(rolesPath, { method: "PATCH", body: { is_active: false } })).status, 404);
+  assert.equal(update.mock.calls[0].arguments[2], false);
+
+  const createAdmin = await client(`/${companyId}/users`, {
+    method: "POST",
+    body: { role: "ADMIN", name: "Admin", email: "admin@example.invalid", password: "contraseña de prueba larga" },
+  });
+  assert.equal(createAdmin.status, 403);
+});
+
+test("las empresas validan paginación y cuerpos antes de escribir", async (t) => {
+  const create = t.mock.fn(async (input) => ({ id: companyId, name: input.name, is_active: input.isActive }));
+  const list = t.mock.fn(async () => []);
+  const client = await administrationClient(t, "PLATFORM_ADMIN", { businesses: { create, list } });
+
+  for (const query of ["?limit=101", "?limit=1&limit=2", "?offset=-1", "?offset=9007199254740992"]) {
+    assert.equal((await client("/" + query)).status, 400);
+  }
+  assert.equal(list.mock.callCount(), 0);
+  const page = await client("/");
+  assert.deepEqual(await page.json(), { items: [], limit: 25, offset: 0 });
+
+  for (const body of [{ name: " " }, { name: "x", is_active: "false" }, { name: "Otra", id: companyId }]) {
+    assert.equal((await client("/", { method: "POST", body })).status, 400);
+  }
+  assert.equal(create.mock.callCount(), 0);
+
+  const response = await client("/", { method: "POST", body: { name: "  Tienda  ", is_active: false } });
+  assert.equal(response.status, 201);
+  assert.deepEqual(await response.json(), { id: companyId, name: "Tienda", is_active: false });
+});
+
+test("las cuentas nuevas guardan un hash y traducen el correo duplicado a 409", async (t) => {
+  const create = t.mock.fn(async () => { throw { code: "23505", constraint: "users_email_ci_uniq" }; });
+  const client = await administrationClient(t, "PLATFORM_ADMIN", {
+    businesses: { findById: async () => ({ id: companyId }) },
+    businessUsers: { create },
+  });
+  const profile = { name: "Persona", email: " persona@example.invalid ", role: "ADMIN" };
+  const path = `/${companyId}/users`;
+  assert.equal((await client(path, { method: "POST", body: { ...profile, password: "muy-corta" } })).status, 400);
+  assert.equal((await client(path, { method: "POST", body: { ...profile, password: "contraseña de prueba larga", business_id: otherCompanyId } })).status, 400);
+  assert.equal(create.mock.callCount(), 0);
+
+  const response = await client(path, { method: "POST", body: { ...profile, password: "contraseña de prueba larga" } });
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).error.code, "CONFLICT");
+  const [id, input] = create.mock.calls[0].arguments;
+  assert.equal(id, companyId);
+  assert.equal(input.email, "persona@example.invalid");
+  assert.match(input.passwordHash, /^scrypt-v1\$/);
+  assert(!Object.hasOwn(input, "password"));
 });

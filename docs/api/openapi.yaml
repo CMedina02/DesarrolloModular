@@ -138,6 +138,10 @@ paths:
           "$ref": "#/components/responses/Unauthorized"
         '403':
           "$ref": "#/components/responses/Forbidden"
+        '413':
+          "$ref": "#/components/responses/PayloadTooLarge"
+        '415':
+          "$ref": "#/components/responses/UnsupportedMediaType"
         '500':
           "$ref": "#/components/responses/InternalError"
   "/businesses/{business_id}":
@@ -198,6 +202,10 @@ paths:
           "$ref": "#/components/responses/Forbidden"
         '404':
           "$ref": "#/components/responses/NotFound"
+        '413':
+          "$ref": "#/components/responses/PayloadTooLarge"
+        '415':
+          "$ref": "#/components/responses/UnsupportedMediaType"
         '500':
           "$ref": "#/components/responses/InternalError"
   "/businesses/{business_id}/users":
@@ -237,7 +245,7 @@ paths:
       - Usuarios
       summary: Crear un usuario de empresa
       operationId: createUser
-      description: PLATFORM_ADMIN puede crear cuentas ADMIN o EMPLOYEE de la empresa. ADMIN solo puede crear EMPLOYEE de su propia empresa. El correo es único en toda la instalación. El servidor recibe la contraseña por HTTPS y conserva su hash.
+      description: PLATFORM_ADMIN puede crear cuentas ADMIN o EMPLOYEE de la empresa. ADMIN solo puede crear EMPLOYEE de su propia empresa. El correo es único en toda la instalación. El servidor recibe la contraseña por HTTPS y conserva su hash. PLATFORM_ADMIN puede preparar las cuentas de una empresa inactiva.
       x-roles:
       - PLATFORM_ADMIN
       - ADMIN
@@ -264,6 +272,10 @@ paths:
           "$ref": "#/components/responses/NotFound"
         '409':
           "$ref": "#/components/responses/Conflict"
+        '413':
+          "$ref": "#/components/responses/PayloadTooLarge"
+        '415':
+          "$ref": "#/components/responses/UnsupportedMediaType"
         '500':
           "$ref": "#/components/responses/InternalError"
   "/businesses/{business_id}/users/{user_id}":
@@ -275,7 +287,7 @@ paths:
       - Usuarios
       summary: Actualizar un usuario de empresa
       operationId: updateUser
-      description: PLATFORM_ADMIN puede modificar cuentas ADMIN o EMPLOYEE de la empresa. ADMIN solo puede modificar empleados propios y no puede promoverlos a ADMIN. Para conservar el historial se desactiva la cuenta con is_active. Este recurso no administra cuentas PLATFORM_ADMIN.
+      description: PLATFORM_ADMIN puede modificar cuentas ADMIN o EMPLOYEE de la empresa. ADMIN solo puede modificar empleados de su empresa. Asignar ADMIN devuelve 403 y un usuario fuera de su alcance devuelve 404. Para conservar el historial se desactiva la cuenta con is_active. Este recurso no administra cuentas PLATFORM_ADMIN.
       x-roles:
       - PLATFORM_ADMIN
       - ADMIN
@@ -302,6 +314,10 @@ paths:
           "$ref": "#/components/responses/NotFound"
         '409':
           "$ref": "#/components/responses/Conflict"
+        '413':
+          "$ref": "#/components/responses/PayloadTooLarge"
+        '415':
+          "$ref": "#/components/responses/UnsupportedMediaType"
         '500':
           "$ref": "#/components/responses/InternalError"
   "/businesses/{business_id}/modules":
@@ -800,6 +816,7 @@ components:
       schema:
         type: integer
         minimum: 0
+        maximum: 9007199254740991
         default: 0
   responses:
     BadRequest:
@@ -1122,7 +1139,8 @@ components:
           type: boolean
         password:
           type: string
-          minLength: 1
+          minLength: 15
+          maxLength: 256
           writeOnly: true
     UserUpdate:
       type: object

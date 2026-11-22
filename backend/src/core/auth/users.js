@@ -1,6 +1,4 @@
-const profileColumns = `
-  u.id, u.business_id, u.name, u.email, u.role, u.is_active, u.created_at, u.updated_at
-`;
+import { userProfileColumns } from "../users/repository.js";
 
 const activeUsers = `
   FROM users AS u
@@ -13,7 +11,7 @@ export function createAuthUsers(pool) {
   return {
     async findByEmail(email) {
       const result = await pool.query(
-        `SELECT ${profileColumns}, u.password_hash ${activeUsers} AND lower(u.email) = lower($1)`,
+        `SELECT ${userProfileColumns}, u.password_hash ${activeUsers} AND lower(u.email) = lower($1)`,
         [email]
       );
       return result.rows[0];
@@ -21,7 +19,7 @@ export function createAuthUsers(pool) {
 
     async findById(id) {
       const result = await pool.query(
-        `SELECT ${profileColumns} ${activeUsers} AND u.id = $1`,
+        `SELECT ${userProfileColumns} ${activeUsers} AND u.id = $1`,
         [id]
       );
       return result.rows[0];

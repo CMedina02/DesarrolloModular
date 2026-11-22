@@ -1,14 +1,12 @@
 import express from "express";
 import { rateLimit } from "express-rate-limit";
 import { sendError } from "../http/errors.js";
+import { jsonBody } from "../http/json.js";
 import { normalizeEmail } from "./input.js";
 import { isValidPassword, verifyPassword } from "./password.js";
+import { unauthorized } from "./session.js";
 
-function unauthorized(response) {
-  return sendError(response, 401, "UNAUTHENTICATED", "Credenciales o sesión no válidas.");
-}
-
-export function createAuthRouter({ users, tokens }) {
+export function createAuthRouter({ users, tokens }, requireSession) {
   const router = express.Router();
   const limitLogin = rateLimit({
     limit: 10,
@@ -24,12 +22,7 @@ export function createAuthRouter({ users, tokens }) {
     next();
   });
 
-  router.post("/login", limitLogin, express.json({ limit: "4kb", inflate: false }), async (request, response) => {
-    const mediaType = request.get("content-type")?.split(";", 1)[0].trim().toLowerCase();
-    if (mediaType !== "application/json") {
-      return sendError(response, 415, "UNSUPPORTED_MEDIA_TYPE", "Envía JSON sin compresión en application/json.");
-    }
-
+  router.post("/login", limitLogin, jsonBody, async (request, response) => {
     const { email: inputEmail, password, ...unexpected } = request.body ?? {};
     const email = normalizeEmail(inputEmail);
     if (!email || !isValidPassword(password) || Object.keys(unexpected).length > 0) {
@@ -51,19 +44,7 @@ export function createAuthRouter({ users, tokens }) {
     });
   });
 
-  router.get("/me", async (request, response) => {
-    const authorization = request.get("authorization") ?? "";
-    const token = /^Bearer +([A-Za-z0-9_.-]+)$/i.exec(authorization)?.[1];
-    const id = token ? await tokens.verify(token) : null;
-    const user = id ? await users.findById(id) : null;
-
-    if (!user) {
-      response.set("WWW-Authenticate", "Bearer");
-      return unauthorized(response);
-    }
-
-    return response.json(user);
-  });
+  router.get("/me", requireSession, (request, response) => response.json(request.authUser));
 
   return router;
 }

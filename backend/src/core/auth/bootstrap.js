@@ -1,9 +1,7 @@
-export async function insertFirstAdministrator(pool, { name, email, passwordHash }) {
-  const client = await pool.connect();
-  let discardClient = false;
+import { withTransaction } from "../database/transaction.js";
 
-  try {
-    await client.query("BEGIN ISOLATION LEVEL READ COMMITTED");
+export function insertFirstAdministrator(pool, { name, email, passwordHash }) {
+  return withTransaction(pool, async (client) => {
     await client.query("LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE");
     const existing = await client.query("SELECT 1 FROM users WHERE role = 'PLATFORM_ADMIN' LIMIT 1");
     let status = "already_initialized";
@@ -18,16 +16,6 @@ export async function insertFirstAdministrator(pool, { name, email, passwordHash
       status = result.rowCount === 1 ? "created" : "email_in_use";
     }
 
-    await client.query("COMMIT");
     return status;
-  } catch (error) {
-    try {
-      await client.query("ROLLBACK");
-    } catch {
-      discardClient = true;
-    }
-    throw error;
-  } finally {
-    client.release(discardClient);
-  }
+  });
 }

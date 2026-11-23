@@ -184,6 +184,7 @@ const companyId = "be6f55c3-8053-409d-8a40-2bebbc461551";
 const otherCompanyId = "2b2c32ce-89bd-4153-b287-299880bb411e";
 const employeeId = "f2d8afb5-6f6b-4eb9-b7e7-c590a2bbfbae";
 const businessesPath = "/api/v1/businesses";
+const writeClient = {};
 
 async function administrationClient(t, role, administration) {
   const profile = {
@@ -192,13 +193,21 @@ async function administrationClient(t, role, administration) {
     business_id: role === "PLATFORM_ADMIN" ? null : companyId,
   };
   const tokens = createAccessTokens(Buffer.alloc(32, 21));
-  const baseUrl = await listen(t, async () => {}, { tokens, users: { findById: async () => profile } }, administration);
+  const authorizedWrite = async (_session, operation) => ({
+    status: "authorized",
+    resource: await operation(writeClient),
+  });
+  const baseUrl = await listen(t, async () => {}, { tokens, users: { findById: async () => profile } }, {
+    authorizedWrite,
+    ...administration,
+  });
   const token = await tokens.issue(profile.id);
-  return (path, { method = "GET", body } = {}) => fetch(baseUrl + businessesPath + path, {
+  return (path, { method = "GET", body, extraHeaders } = {}) => fetch(baseUrl + businessesPath + path, {
     method,
     headers: {
       authorization: `Bearer ${token}`,
       ...(body !== undefined && { "content-type": "application/json" }),
+      ...extraHeaders,
     },
     body: JSON.stringify(body),
   });
@@ -252,7 +261,8 @@ test("ADMIN solo consulta su empresa y opera cuentas EMPLOYEE", async (t) => {
   const rolesPath = `/${companyId}/users/${employeeId}`;
   assert.equal((await client(rolesPath, { method: "PATCH", body: { role: "ADMIN" } })).status, 403);
   assert.equal((await client(rolesPath, { method: "PATCH", body: { is_active: false } })).status, 404);
-  assert.equal(update.mock.calls[0].arguments[2], false);
+  assert.equal(update.mock.calls[0].arguments[0], writeClient);
+  assert.equal(update.mock.calls[0].arguments[3], false);
 
   const createAdmin = await client(`/${companyId}/users`, {
     method: "POST",
@@ -262,7 +272,7 @@ test("ADMIN solo consulta su empresa y opera cuentas EMPLOYEE", async (t) => {
 });
 
 test("las empresas validan paginación y cuerpos antes de escribir", async (t) => {
-  const create = t.mock.fn(async (input) => ({ id: companyId, name: input.name, is_active: input.isActive }));
+  const create = t.mock.fn(async (_client, input) => ({ id: companyId, name: input.name, is_active: input.isActive }));
   const list = t.mock.fn(async () => []);
   const client = await administrationClient(t, "PLATFORM_ADMIN", { businesses: { create, list } });
 
@@ -298,9 +308,55 @@ test("las cuentas nuevas guardan un hash y traducen el correo duplicado a 409", 
   const response = await client(path, { method: "POST", body: { ...profile, password: "contraseña de prueba larga" } });
   assert.equal(response.status, 409);
   assert.equal((await response.json()).error.code, "CONFLICT");
-  const [id, input] = create.mock.calls[0].arguments;
+  const [clientUsed, id, input] = create.mock.calls[0].arguments;
+  assert.equal(clientUsed, writeClient);
   assert.equal(id, companyId);
   assert.equal(input.email, "persona@example.invalid");
   assert.match(input.passwordHash, /^scrypt-v1\$/);
   assert(!Object.hasOwn(input, "password"));
+});
+
+test("el ámbito de empresa solo se deriva de la sesión y la ruta", async (t) => {
+  const findById = t.mock.fn(async (id) => ({ id }));
+  const list = t.mock.fn(async () => []);
+  const client = await administrationClient(t, "ADMIN", {
+    businesses: { findById },
+    businessUsers: { list },
+  });
+  const headers = { "x-business-id": otherCompanyId, "x-role": "PLATFORM_ADMIN" };
+  const allowed = await client(`/${companyId.toUpperCase()}/users?business_id=${otherCompanyId}`, {
+    extraHeaders: headers,
+  });
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.headers.get("cache-control"), "no-store");
+  assert.equal(findById.mock.calls[0].arguments[0], companyId);
+  assert.equal(list.mock.calls[0].arguments[0], companyId);
+  assert.equal(list.mock.calls[0].arguments[1], false);
+
+  const denied = await client(`/${otherCompanyId}/users?business_id=${companyId}`, {
+    extraHeaders: { "x-business-id": companyId, "x-role": "PLATFORM_ADMIN" },
+  });
+  assert.equal(denied.status, 404);
+  assert.equal(findById.mock.callCount(), 1);
+  assert.equal(list.mock.callCount(), 1);
+});
+
+test("una autorización revocada durante una escritura conserva el código HTTP y omite la mutación", async (t) => {
+  const update = t.mock.fn();
+  let status = "unauthenticated";
+  const authorizedWrite = t.mock.fn(async () => ({ status }));
+  const client = await administrationClient(t, "ADMIN", { businessUsers: { update }, authorizedWrite });
+  const path = `/${companyId}/users/${employeeId}`;
+  const body = { name: "Nombre autorizado al iniciar la solicitud" };
+
+  const inactive = await client(path, { method: "PATCH", body });
+  assert.equal(inactive.status, 401);
+  assert.equal(inactive.headers.get("www-authenticate"), "Bearer");
+
+  status = "forbidden";
+  assert.equal((await client(path, { method: "PATCH", body })).status, 403);
+  status = "out_of_scope";
+  assert.equal((await client(path, { method: "PATCH", body })).status, 404);
+  assert.equal(authorizedWrite.mock.callCount(), 3);
+  assert.equal(update.mock.callCount(), 0);
 });

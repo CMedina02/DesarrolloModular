@@ -15,8 +15,8 @@ export function createBusinessUsers(pool) {
       return result.rows;
     },
 
-    async create(businessId, { name, email, passwordHash, role, isActive = true }) {
-      const result = await pool.query(
+    async create(client, businessId, { name, email, passwordHash, role, isActive = true }) {
+      const result = await client.query(
         `INSERT INTO users AS u (business_id, name, email, password_hash, role, is_active)
          VALUES ($1, $2, $3, $4, $5, $6) RETURNING ${userProfileColumns}`,
         [businessId, name, email, passwordHash, role, isActive]
@@ -24,8 +24,8 @@ export function createBusinessUsers(pool) {
       return result.rows[0];
     },
 
-    async update(businessId, userId, mayManageAdmins, { name, email, role, isActive }) {
-      const result = await pool.query(
+    async update(client, businessId, userId, mayManageAdmins, { name, email, role, isActive }) {
+      const result = await client.query(
         `UPDATE users AS u SET name = COALESCE($3, u.name),
            email = COALESCE($4, u.email), role = COALESCE($5, u.role),
            is_active = COALESCE($6, u.is_active), updated_at = now()

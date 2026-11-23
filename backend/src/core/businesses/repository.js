@@ -18,8 +18,8 @@ export function createBusinesses(pool) {
       return result.rows[0];
     },
 
-    async create({ name, isActive = true }) {
-      const result = await pool.query(
+    async create(client, { name, isActive = true }) {
+      const result = await client.query(
         `INSERT INTO businesses (name, is_active) VALUES ($1, $2)
          RETURNING ${businessColumns}`,
         [name, isActive]
@@ -27,8 +27,8 @@ export function createBusinesses(pool) {
       return result.rows[0];
     },
 
-    async update(id, { name, isActive }) {
-      const result = await pool.query(
+    async update(client, id, { name, isActive }) {
+      const result = await client.query(
         `UPDATE businesses SET name = COALESCE($2, name),
            is_active = COALESCE($3, is_active), updated_at = now()
          WHERE id = $1 RETURNING ${businessColumns}`,

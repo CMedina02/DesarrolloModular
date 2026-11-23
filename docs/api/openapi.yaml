@@ -5,7 +5,7 @@ info:
   description: |-
     Contrato inicial de Core e Inventario Comercial 1.0 para una instalación. Representa identificadores como cadenas UUID y fechas como marcas de tiempo RFC 3339.
 
-    Cada operación protegida valida JWT, cuenta activa, rol y contexto. Un usuario de empresa solo accede a su business_id autorizado. Un recurso fuera de ese ámbito recibe 404. Las operaciones de Inventario también requieren empresa activa y módulo habilitado.
+    Cada operación protegida valida JWT, cuenta activa, rol y contexto. Un usuario de empresa solo accede a su business_id autorizado. Un recurso fuera de ese ámbito recibe 404. El ámbito se obtiene de la sesión y de la ruta autorizada. Las escrituras administrativas vuelven a verificar los permisos en su transacción. Las operaciones de Inventario también requieren empresa activa y módulo habilitado.
 
     x-roles indica los roles admitidos. Las restricciones por empresa, tipo de movimiento y estado se aplican en el servidor. El cliente puede usar error.code para distinguir las categorías de error. La API recorta los espacios exteriores de los nombres, el correo y el SKU antes de validarlos. La contraseña se conserva tal como se recibe para verificarla o calcular su hash.
 

@@ -22,6 +22,8 @@ El esquema T02 usa UUID y separa cinco tablas. `businesses` y `users` pertenecen
 
 El servidor verifica el JWT y comprueba que la cuenta y, cuando corresponda, su empresa sigan activas. Después valida el rol y compara la empresa solicitada con la empresa autorizada antes de consultar o escribir datos. Las consultas de Inventario incluyen ese ámbito. La API deriva el autor de cada movimiento de la sesión. La llave de movimientos requiere un autor de la misma empresa, por lo que las cuentas `PLATFORM_ADMIN` quedan fuera de las operaciones de Inventario.
 
+Las rutas de empresa comparten un control de ámbito. Para usuarios de empresa, el identificador que llega al repositorio procede de la sesión y debe coincidir con el UUID solicitado. Las escrituras administrativas vuelven a comprobar el rol, la empresa y el estado de la cuenta dentro de la misma transacción que modifica datos. [Aislamiento multiempresa de B05](tasks/backend/B05.md).
+
 Las contraseñas llegan por HTTPS y se almacenan como hashes. Los perfiles omiten el hash. B03 incorpora la inicialización segura del primer administrador y define la política de contraseñas y vigencia del JWT. El despliegue usa una cuenta PostgreSQL con los permisos necesarios para su función y consultas parametrizadas.
 
 ## Activación y desactivación

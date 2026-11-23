@@ -1,35 +1,32 @@
 import express from "express";
 import { hashPassword } from "../auth/password.js";
-import { requireRoles } from "../auth/session.js";
-import { sendError } from "../http/errors.js";
+import { forbidden, requireRoles, unauthorized } from "../auth/session.js";
+import { notFound, sendError } from "../http/errors.js";
 import { jsonBody } from "../http/json.js";
+import { requireBusinessScope } from "../security/business-scope.js";
 import { isUuid } from "../validation.js";
 import { businessInput, pagination, userInput } from "./input.js";
-
-function notFound(response) {
-  return sendError(response, 404, "NOT_FOUND", "No se encontró el recurso.");
-}
 
 function mayManageAdmins(request) {
   return request.authUser.role === "PLATFORM_ADMIN";
 }
 
-function scopeBusiness(request, response, next) {
-  const businessId = request.params.businessId;
-  if (!isUuid(businessId)) {
-    return sendError(response, 400, "VALIDATION_ERROR", "El identificador de empresa debe ser un UUID.");
-  }
-  if (!mayManageAdmins(request) && request.authUser.business_id !== businessId.toLowerCase()) {
-    return notFound(response);
-  }
-
-  return next();
-}
-
-async function writeUser(response, status, save) {
+async function respondToWrite(response, status, save) {
   try {
-    const user = await save();
-    return user ? response.status(status).json(user) : notFound(response);
+    const outcome = await save();
+
+    switch (outcome.status) {
+      case "authorized":
+        return outcome.resource ? response.status(status).json(outcome.resource) : notFound(response);
+      case "unauthenticated":
+        return unauthorized(response.set("WWW-Authenticate", "Bearer"));
+      case "forbidden":
+        return forbidden(response);
+      case "out_of_scope":
+        return notFound(response);
+      default:
+        throw new Error("Resultado de autorización desconocido.");
+    }
   } catch (error) {
     if (error.code === "23505" && error.constraint === "users_email_ci_uniq") {
       return sendError(response, 409, "CONFLICT", "El correo ya está registrado.");
@@ -42,10 +39,10 @@ async function writeUser(response, status, save) {
   }
 }
 
-export function createBusinessRouter({ businesses, businessUsers, requireSession }) {
+export function createBusinessRouter({ businesses, businessUsers, requireSession, authorizedWrite }) {
   const router = express.Router();
   const platformOnly = [requireSession, requireRoles("PLATFORM_ADMIN")];
-  const companyAccess = [requireSession, requireRoles("PLATFORM_ADMIN", "ADMIN"), scopeBusiness];
+  const companyAccess = [requireSession, requireRoles("PLATFORM_ADMIN", "ADMIN"), requireBusinessScope];
 
   router.route("/")
     .get(platformOnly, async (request, response) => {
@@ -63,22 +60,27 @@ export function createBusinessRouter({ businesses, businessUsers, requireSession
         return sendError(response, 400, "VALIDATION_ERROR", "Revisa los datos de la empresa.");
       }
 
-      return response.status(201).json(await businesses.create(input));
+      return respondToWrite(response, 201, () =>
+        authorizedWrite(request.authUser, (client) => businesses.create(client, input))
+      );
     });
 
   router.route("/:businessId")
     .get(companyAccess, async (request, response) => {
-      const business = await businesses.findById(request.params.businessId);
+      const business = await businesses.findById(request.businessId);
       return business ? response.json(business) : notFound(response);
     })
-    .patch(platformOnly, scopeBusiness, jsonBody, async (request, response) => {
+    .patch(platformOnly, requireBusinessScope, jsonBody, async (request, response) => {
       const input = businessInput(request.body, false);
       if (!input) {
         return sendError(response, 400, "VALIDATION_ERROR", "Revisa los datos de la empresa.");
       }
 
-      const business = await businesses.update(request.params.businessId, input);
-      return business ? response.json(business) : notFound(response);
+      return respondToWrite(response, 200, () =>
+        authorizedWrite(request.authUser, (client) =>
+          businesses.update(client, request.businessId, input)
+        )
+      );
     });
 
   router.route("/:businessId/users")
@@ -88,7 +90,7 @@ export function createBusinessRouter({ businesses, businessUsers, requireSession
         return sendError(response, 400, "VALIDATION_ERROR", "Revisa limit y offset.");
       }
 
-      const { businessId } = request.params;
+      const { businessId } = request;
       if (!(await businesses.findById(businessId))) {
         return notFound(response);
       }
@@ -105,18 +107,22 @@ export function createBusinessRouter({ businesses, businessUsers, requireSession
         return sendError(response, 403, "FORBIDDEN", "Solo el administrador de plataforma puede asignar el rol ADMIN.");
       }
 
-      const { businessId } = request.params;
+      const { businessId } = request;
       if (!(await businesses.findById(businessId))) {
         return notFound(response);
       }
 
       const { password, ...profile } = input;
       const passwordHash = await hashPassword(password);
-      return writeUser(response, 201, () => businessUsers.create(businessId, { ...profile, passwordHash }));
+      return respondToWrite(response, 201, () =>
+        authorizedWrite(request.authUser, (client) =>
+          businessUsers.create(client, businessId, { ...profile, passwordHash })
+        )
+      );
     });
 
   router.patch("/:businessId/users/:userId", companyAccess, jsonBody, async (request, response) => {
-    const { businessId, userId } = request.params;
+    const { userId } = request.params;
     if (!isUuid(userId)) {
       return sendError(response, 400, "VALIDATION_ERROR", "El identificador de usuario debe ser un UUID.");
     }
@@ -131,7 +137,11 @@ export function createBusinessRouter({ businesses, businessUsers, requireSession
       return sendError(response, 403, "FORBIDDEN", "Solo el administrador de plataforma puede asignar el rol ADMIN.");
     }
 
-    return writeUser(response, 200, () => businessUsers.update(businessId, userId, platformAdmin, input));
+    return respondToWrite(response, 200, () =>
+      authorizedWrite(request.authUser, (client) =>
+        businessUsers.update(client, request.businessId, userId, platformAdmin, input)
+      )
+    );
   });
 
   return router;

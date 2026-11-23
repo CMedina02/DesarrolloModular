@@ -4,6 +4,10 @@ export function unauthorized(response) {
   return sendError(response, 401, "UNAUTHENTICATED", "Credenciales o sesión no válidas.");
 }
 
+export function forbidden(response) {
+  return sendError(response, 403, "FORBIDDEN", "La operación no está disponible para la sesión actual.");
+}
+
 export function createRequireSession({ users, tokens }) {
   return async function requireSession(request, response, next) {
     response.set("Cache-Control", "no-store");
@@ -25,7 +29,7 @@ export function createRequireSession({ users, tokens }) {
 export function requireRoles(...roles) {
   return (request, response, next) => {
     if (!roles.includes(request.authUser.role)) {
-      return sendError(response, 403, "FORBIDDEN", "La operación no está disponible para la sesión actual.");
+      return forbidden(response);
     }
 
     return next();

@@ -2,7 +2,7 @@ import express from "express";
 import { createAuthRouter } from "./core/auth/routes.js";
 import { createRequireSession } from "./core/auth/session.js";
 import { createBusinessRouter } from "./core/businesses/routes.js";
-import { sendError } from "./core/http/errors.js";
+import { notFound, sendError } from "./core/http/errors.js";
 
 const bodyErrors = {
   "entity.parse.failed": [400, "VALIDATION_ERROR", "El cuerpo JSON no es válido."],
@@ -12,7 +12,7 @@ const bodyErrors = {
   "encoding.unsupported": [415, "UNSUPPORTED_MEDIA_TYPE", "Envía JSON sin compresión en application/json."],
 };
 
-export function createApp({ checkDatabase, auth, businesses, businessUsers }) {
+export function createApp({ checkDatabase, auth, businesses, businessUsers, authorizedWrite }) {
   const app = express();
   app.disable("x-powered-by");
 
@@ -34,11 +34,14 @@ export function createApp({ checkDatabase, auth, businesses, businessUsers }) {
 
   const requireSession = createRequireSession(auth);
   app.use("/api/v1/auth", createAuthRouter(auth, requireSession));
-  app.use("/api/v1/businesses", createBusinessRouter({ businesses, businessUsers, requireSession }));
+  app.use("/api/v1/businesses", createBusinessRouter({
+    businesses,
+    businessUsers,
+    requireSession,
+    authorizedWrite,
+  }));
 
-  app.use((_request, response) =>
-    sendError(response, 404, "NOT_FOUND", "No se encontró el recurso.")
-  );
+  app.use((_request, response) => notFound(response));
 
   app.use((error, _request, response, next) => {
     if (response.headersSent) {

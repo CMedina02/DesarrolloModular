@@ -3,10 +3,11 @@ import { hashPassword } from "../auth/password.js";
 import { requireRoles } from "../auth/session.js";
 import { notFound, sendError } from "../http/errors.js";
 import { jsonBody } from "../http/json.js";
+import { pagination } from "../http/pagination.js";
 import { requireBusinessScope } from "../security/business-scope.js";
 import { respondToAuthorizedWrite } from "../security/write-response.js";
 import { isUuid } from "../validation.js";
-import { businessInput, pagination, userInput } from "./input.js";
+import { businessInput, userInput } from "./input.js";
 
 function mayManageAdmins(request) {
   return request.authUser.role === "PLATFORM_ADMIN";

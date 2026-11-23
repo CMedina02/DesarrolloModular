@@ -30,6 +30,14 @@ export function createBusinessModules(pool) {
       return result.rows[0];
     },
 
+    async lockEnabled(client, businessId, key) {
+      const result = await client.query(
+        "SELECT enabled FROM business_modules WHERE business_id = $1 AND module_key = $2 FOR SHARE",
+        [businessId, key]
+      );
+      return result.rows[0]?.enabled === true;
+    },
+
     async isEnabled(businessId, key) {
       const result = await pool.query(
         "SELECT enabled FROM business_modules WHERE business_id = $1 AND module_key = $2",

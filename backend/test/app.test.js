@@ -411,11 +411,11 @@ test("Inventario aplica sesión, rol, alcance y habilitación antes del módulo"
   const employee = await administrationClient(t, "EMPLOYEE", administration);
   const platform = await administrationClient(t, "PLATFORM_ADMIN", administration);
   const anonymous = await listen(t, async () => {});
-  const path = `/${companyId}/inventory/categories`;
+  const path = `/${companyId}/inventory/products`;
 
   assert.equal((await fetch(anonymous + businessesPath + path)).status, 401);
   assert.equal((await platform(path)).status, 403);
-  assert.equal((await employee(`/${otherCompanyId}/inventory/categories`)).status, 404);
+  assert.equal((await employee(`/${otherCompanyId}/inventory/products`)).status, 404);
   assert.equal(isEnabled.mock.callCount(), 0);
 
   const disabled = await employee(path);
@@ -427,4 +427,122 @@ test("Inventario aplica sesión, rol, alcance y habilitación antes del módulo"
   assert.equal(passesGuard.status, 404);
   assert.equal((await passesGuard.json()).error.code, "NOT_FOUND");
   assert.equal(isEnabled.mock.callCount(), 2);
+});
+
+const categoriesPath = `/${companyId}/inventory/categories`;
+const categoryId = "c870bd2b-4afe-41da-aa61-d3bea41315c7";
+const categoryRow = {
+  id: categoryId,
+  business_id: companyId,
+  name: "Herramientas",
+  created_at: "2026-11-24T18:00:00.000Z",
+  updated_at: "2026-11-24T18:00:00.000Z",
+};
+
+test("las categorías se listan y consultan en la empresa de la sesión", async (t) => {
+  const list = t.mock.fn(async () => [categoryRow]);
+  const findById = t.mock.fn(async (_businessId, id) => id === categoryId ? categoryRow : undefined);
+  const employee = await administrationClient(t, "EMPLOYEE", {
+    businessModules: { isEnabled: async () => true },
+    categories: { list, findById },
+  });
+  const page = await employee(categoriesPath + "?limit=5&offset=2&business_id=" + otherCompanyId);
+  assert.equal(page.status, 200);
+  assert.deepEqual(await page.json(), { items: [categoryRow], limit: 5, offset: 2 });
+  assert.deepEqual(list.mock.calls[0].arguments, [companyId, { limit: 5, offset: 2 }]);
+  assert.equal((await employee(categoriesPath + "?limit=0")).status, 400);
+  assert.equal((await employee(categoriesPath + "/mal-uuid")).status, 400);
+  assert.equal((await employee(`/${otherCompanyId}/inventory/categories/${categoryId}`)).status, 404);
+
+  const found = await employee(categoriesPath + "/" + categoryId);
+  assert.deepEqual(await found.json(), categoryRow);
+  assert.deepEqual(findById.mock.calls[0].arguments, [companyId, categoryId]);
+  assert.equal((await employee(categoriesPath + "/" + employeeId)).status, 404);
+  assert.equal(list.mock.callCount(), 1);
+  assert.equal(findById.mock.callCount(), 2);
+});
+
+test("solo ADMIN crea, renombra y elimina categorías válidas", async (t) => {
+  const create = t.mock.fn(async (_client, _businessId, name) => ({ ...categoryRow, name }));
+  const update = t.mock.fn(async (_client, _businessId, _categoryId, name) => ({ ...categoryRow, name }));
+  const remove = t.mock.fn(async () => ({ id: categoryId }));
+  const lockEnabled = t.mock.fn(async () => true);
+  const administration = {
+    businessModules: { isEnabled: async () => true, lockEnabled },
+    categories: { create, update, remove },
+  };
+  const employee = await administrationClient(t, "EMPLOYEE", administration);
+  const platform = await administrationClient(t, "PLATFORM_ADMIN", administration);
+  const admin = await administrationClient(t, "ADMIN", administration);
+  const item = categoriesPath + "/" + categoryId;
+
+  assert.equal((await employee(categoriesPath, { method: "POST", body: { name: "Material" } })).status, 403);
+  assert.equal((await employee(item, { method: "PATCH", body: { name: "Material" } })).status, 403);
+  assert.equal((await employee(item, { method: "DELETE" })).status, 403);
+  assert.equal((await platform(categoriesPath)).status, 403);
+  for (const body of [{ name: " " }, { name: "a".repeat(101) }, { name: "Material", business_id: otherCompanyId }]) {
+    assert.equal((await admin(categoriesPath, { method: "POST", body })).status, 400);
+  }
+  assert.equal(lockEnabled.mock.callCount(), 0);
+
+  const created = await admin(categoriesPath, { method: "POST", body: { name: "  Herramientas  " } });
+  assert.equal(created.status, 201);
+  assert.deepEqual(await created.json(), categoryRow);
+  assert.deepEqual(create.mock.calls[0].arguments, [writeClient, companyId, "Herramientas"]);
+
+  const renamed = await admin(item, { method: "PATCH", body: { name: "Material" } });
+  assert.equal(renamed.status, 200);
+  assert.equal((await renamed.json()).name, "Material");
+  assert.deepEqual(update.mock.calls[0].arguments, [writeClient, companyId, categoryId, "Material"]);
+
+  const deleted = await admin(item, { method: "DELETE" });
+  assert.equal(deleted.status, 204);
+  assert.equal(await deleted.text(), "");
+  assert.deepEqual(remove.mock.calls[0].arguments, [writeClient, companyId, categoryId]);
+  assert.equal(lockEnabled.mock.callCount(), 3);
+  assert.deepEqual(lockEnabled.mock.calls[0].arguments, [writeClient, companyId, "inventory"]);
+});
+
+test("las restricciones de categorías se traducen a 409", async (t) => {
+  const duplicate = Object.assign(new Error("duplicate"), { code: "23505", constraint: "categories_business_name_ci_uniq" });
+  const referenceCodes = ["23001", "23503"];
+  const referenceConstraint = "products_category_same_business_fk";
+  const admin = await administrationClient(t, "ADMIN", {
+    businessModules: { isEnabled: async () => true, lockEnabled: async () => true },
+    categories: {
+      create: async () => { throw duplicate; },
+      update: async () => { throw duplicate; },
+      remove: async () => {
+        throw Object.assign(new Error("foreign key"), { code: referenceCodes.shift(), constraint: referenceConstraint });
+      },
+    },
+  });
+  const item = categoriesPath + "/" + categoryId;
+  for (const [path, options, message] of [
+    [categoriesPath, { method: "POST", body: { name: "Material" } }, "Ya existe una categoría con ese nombre."],
+    [item, { method: "PATCH", body: { name: "Material" } }, "Ya existe una categoría con ese nombre."],
+    [item, { method: "DELETE" }, "La categoría tiene productos asociados."],
+    [item, { method: "DELETE" }, "La categoría tiene productos asociados."],
+  ]) {
+    const response = await admin(path, options);
+    assert.equal(response.status, 409);
+    assert.deepEqual((await response.json()).error, { code: "CONFLICT", message });
+  }
+});
+
+test("una desactivación antes de la escritura impide modificar categorías", async (t) => {
+  const update = t.mock.fn();
+  const lockEnabled = t.mock.fn(async () => false);
+  const admin = await administrationClient(t, "ADMIN", {
+    businessModules: { isEnabled: async () => true, lockEnabled },
+    categories: { update },
+  });
+  const response = await admin(categoriesPath + "/" + categoryId, {
+    method: "PATCH",
+    body: { name: "Cambio bloqueado" },
+  });
+  assert.equal(response.status, 403);
+  assert.equal((await response.json()).error.code, "FORBIDDEN");
+  assert.equal(lockEnabled.mock.callCount(), 1);
+  assert.equal(update.mock.callCount(), 0);
 });

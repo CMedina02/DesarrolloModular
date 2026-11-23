@@ -9,6 +9,7 @@ import { checkDatabase, createPool } from "./core/database/pool.js";
 import { createBusinessModules } from "./core/modules/repository.js";
 import { createAuthorizedWrite } from "./core/security/authorized-write.js";
 import { createBusinessUsers } from "./core/users/repository.js";
+import { createCategories } from "./modules/inventory/categories/repository.js";
 
 async function startServer({ host, port, databaseUrl, jwtSecret }) {
   const pool = createPool(databaseUrl);
@@ -18,6 +19,7 @@ async function startServer({ host, port, databaseUrl, jwtSecret }) {
     businesses: createBusinesses(pool),
     businessUsers: createBusinessUsers(pool),
     businessModules: createBusinessModules(pool),
+    categories: createCategories(pool),
     auth: {
       users: createAuthUsers(pool),
       tokens: createAccessTokens(jwtSecret),

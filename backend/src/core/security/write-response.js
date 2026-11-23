@@ -4,7 +4,10 @@ import { notFound } from "../http/errors.js";
 export function respondToAuthorizedWrite(response, status, outcome) {
   switch (outcome.status) {
     case "authorized":
-      return outcome.resource ? response.status(status).json(outcome.resource) : notFound(response);
+      if (!outcome.resource) {
+        return notFound(response);
+      }
+      return status === 204 ? response.status(status).end() : response.status(status).json(outcome.resource);
     case "unauthenticated":
       return unauthorized(response.set("WWW-Authenticate", "Bearer"));
     case "forbidden":

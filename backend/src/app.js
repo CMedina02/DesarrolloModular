@@ -3,10 +3,11 @@ import { createAuthRouter } from "./core/auth/routes.js";
 import { createRequireSession, requireRoles } from "./core/auth/session.js";
 import { createBusinessRouter } from "./core/businesses/routes.js";
 import { notFound, sendError } from "./core/http/errors.js";
-import { requireEnabledModule } from "./core/modules/access.js";
+import { createModuleWrite, moduleDisabled, ModuleDisabledError, requireEnabledModule } from "./core/modules/access.js";
 import { inventoryModuleKey } from "./core/modules/catalog.js";
 import { createModuleRouter } from "./core/modules/routes.js";
 import { requireBusinessScope } from "./core/security/business-scope.js";
+import { createCategoryRouter } from "./modules/inventory/categories/routes.js";
 
 const bodyErrors = {
   "entity.parse.failed": [400, "VALIDATION_ERROR", "El cuerpo JSON no es válido."],
@@ -16,7 +17,7 @@ const bodyErrors = {
   "encoding.unsupported": [415, "UNSUPPORTED_MEDIA_TYPE", "Envía JSON sin compresión en application/json."],
 };
 
-export function createApp({ checkDatabase, auth, businesses, businessUsers, businessModules, authorizedWrite }) {
+export function createApp({ checkDatabase, auth, businesses, businessUsers, businessModules, authorizedWrite, categories }) {
   const app = express();
   app.disable("x-powered-by");
 
@@ -46,12 +47,14 @@ export function createApp({ checkDatabase, auth, businesses, businessUsers, busi
   }));
 
   app.use("/api/v1/businesses", createModuleRouter({ businessModules, requireSession, authorizedWrite }));
+  const writeCategories = createModuleWrite(authorizedWrite, businessModules, inventoryModuleKey);
   app.use(
     "/api/v1/businesses/:businessId/inventory",
     requireSession,
     requireRoles("ADMIN", "EMPLOYEE"),
     requireBusinessScope,
-    requireEnabledModule(businessModules, inventoryModuleKey)
+    requireEnabledModule(businessModules, inventoryModuleKey),
+    createCategoryRouter({ categories, writeCategories })
   );
 
   app.use((_request, response) => notFound(response));
@@ -59,6 +62,10 @@ export function createApp({ checkDatabase, auth, businesses, businessUsers, busi
   app.use((error, _request, response, next) => {
     if (response.headersSent) {
       return next(error);
+    }
+
+    if (error instanceof ModuleDisabledError) {
+      return moduleDisabled(response);
     }
 
     if (Object.hasOwn(bodyErrors, error.type)) {

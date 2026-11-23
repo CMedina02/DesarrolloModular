@@ -411,11 +411,11 @@ test("Inventario aplica sesión, rol, alcance y habilitación antes del módulo"
   const employee = await administrationClient(t, "EMPLOYEE", administration);
   const platform = await administrationClient(t, "PLATFORM_ADMIN", administration);
   const anonymous = await listen(t, async () => {});
-  const path = `/${companyId}/inventory/products`;
+  const path = `/${companyId}/inventory/movements`;
 
   assert.equal((await fetch(anonymous + businessesPath + path)).status, 401);
   assert.equal((await platform(path)).status, 403);
-  assert.equal((await employee(`/${otherCompanyId}/inventory/products`)).status, 404);
+  assert.equal((await employee(`/${otherCompanyId}/inventory/movements`)).status, 404);
   assert.equal(isEnabled.mock.callCount(), 0);
 
   const disabled = await employee(path);
@@ -545,4 +545,103 @@ test("una desactivación antes de la escritura impide modificar categorías", as
   assert.equal((await response.json()).error.code, "FORBIDDEN");
   assert.equal(lockEnabled.mock.callCount(), 1);
   assert.equal(update.mock.callCount(), 0);
+});
+
+const productsPath = `/${companyId}/inventory/products`;
+const productId = "f7eb3419-7600-4d2a-826b-760366ba79be";
+const productBody = { category_id: categoryId, sku: "FER-01", name: "Clavos", unit: "KG" };
+
+test("productos aplica paginación, filtros, empresa y visibilidad de productos activos", async (t) => {
+  const list = t.mock.fn(async () => []);
+  const findById = t.mock.fn(async (_businessId, _productId, activeOnly) =>
+    activeOnly ? undefined : { id: productId, is_active: false }
+  );
+  const administration = { businessModules: { isEnabled: async () => true }, products: { list, findById } };
+  const admin = await administrationClient(t, "ADMIN", administration);
+  const employee = await administrationClient(t, "EMPLOYEE", administration);
+
+  const response = await employee(productsPath + `?category_id=${categoryId}&is_active=false&low_stock=true&limit=2&offset=3`);
+  assert.deepEqual(await response.json(), { items: [], limit: 2, offset: 3 });
+  assert.deepEqual(list.mock.calls[0].arguments, [companyId, {
+    limit: 2, offset: 3, categoryId, isActive: false, lowStock: true, activeOnly: true,
+  }]);
+  for (const query of ["?is_active=1", "?low_stock=true&low_stock=false", "?category_id=incorrecto", "?limit=101"]) {
+    assert.equal((await admin(productsPath + query)).status, 400);
+  }
+  assert.equal((await employee(`/${otherCompanyId}/inventory/products/${productId}`)).status, 404);
+  assert.equal((await employee(productsPath + "/" + productId)).status, 404);
+  assert.deepEqual(await (await admin(productsPath + "/" + productId)).json(), { id: productId, is_active: false });
+  assert.deepEqual(findById.mock.calls.map(({ arguments: args }) => args), [
+    [companyId, productId, true], [companyId, productId, false],
+  ]);
+});
+
+test("el alta de producto acepta decimales exactos y bloquea el stock directo", async (t) => {
+  const create = t.mock.fn(async (_client, businessId, body) => ({
+    ...body, business_id: businessId, stock_quantity: "0.000",
+  }));
+  const administration = {
+    businessModules: { isEnabled: async () => true, lockEnabled: async () => true },
+    products: { create },
+  };
+  const admin = await administrationClient(t, "ADMIN", administration);
+  const employee = await administrationClient(t, "EMPLOYEE", administration);
+  const put = (client, body) => client(productsPath, { method: "POST", body });
+
+  assert.equal((await put(employee, productBody)).status, 403);
+  for (const changes of [
+    { stock_quantity: "1" }, { business_id: otherCompanyId }, { cost_price: 1.50 },
+    { sale_price: "1.234" }, { sale_price: "10000000000" }, { min_stock: "1.0000" },
+    { min_stock: "1e3" }, { cost_price: "1.00\n" }, { min_stock: "-1" },
+    { unit: "CAJA", min_stock: "1.25" }, { category_id: "categoria" },
+  ]) {
+    assert.equal((await put(admin, { ...productBody, ...changes })).status, 400);
+  }
+  assert.equal(create.mock.callCount(), 0);
+
+  const valid = { ...productBody, sku: " FER-01 ", cost_price: "9999999999.99", sale_price: "5.20", min_stock: "0.125" };
+  const response = await put(admin, valid);
+  assert.equal(response.status, 201);
+  assert.equal((await response.json()).stock_quantity, "0.000");
+  assert.deepEqual(create.mock.calls[0].arguments, [writeClient, companyId, { ...valid, sku: "FER-01" }]);
+});
+
+test("el cambio de unidad verifica historial y cantidades dentro de la escritura", async (t) => {
+  let hasMovements = true;
+  const lockForUpdate = t.mock.fn(async () => ({ unit: "KG", stock_quantity: "0.000", min_stock: "0.500" }));
+  const update = t.mock.fn(async (_client, _businessId, _productId, changes) => changes);
+  const admin = await administrationClient(t, "ADMIN", {
+    businessModules: { isEnabled: async () => true, lockEnabled: async () => true },
+    products: { lockForUpdate, hasMovements: async () => hasMovements, update },
+  });
+  const patch = body => admin(productsPath + "/" + productId, { method: "PATCH", body });
+
+  assert.equal((await patch({ unit: "PZA" })).status, 409);
+  hasMovements = false;
+  assert.equal((await patch({ unit: "PZA" })).status, 400);
+  assert.equal((await patch({ stock_quantity: "2.500" })).status, 400);
+  assert.equal(update.mock.callCount(), 0);
+  const valid = await patch({ unit: "PZA", min_stock: "12.000", is_active: false });
+  assert.equal(valid.status, 200);
+  assert.deepEqual(await valid.json(), { unit: "PZA", min_stock: "12.000", is_active: false });
+  assert.deepEqual(lockForUpdate.mock.calls[0].arguments, [writeClient, companyId, productId]);
+  assert.equal(update.mock.callCount(), 1);
+});
+
+test("el SKU duplicado devuelve 409 y una categoría no disponible devuelve 404", async (t) => {
+  let code = "23505";
+  let constraint = "products_business_sku_ci_uniq";
+  const create = async () => { throw Object.assign(new Error("constraint"), { code, constraint }); };
+  const admin = await administrationClient(t, "ADMIN", {
+    businessModules: { isEnabled: async () => true, lockEnabled: async () => true },
+    products: { create },
+  });
+  const first = await admin(productsPath, { method: "POST", body: productBody });
+  assert.equal(first.status, 409);
+  assert.equal((await first.json()).error.code, "CONFLICT");
+  code = "23503";
+  constraint = "products_category_same_business_fk";
+  const second = await admin(productsPath, { method: "POST", body: productBody });
+  assert.equal(second.status, 404);
+  assert.equal((await second.json()).error.code, "NOT_FOUND");
 });

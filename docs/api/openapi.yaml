@@ -569,12 +569,12 @@ paths:
       - "$ref": "#/components/parameters/Offset"
       - name: category_id
         in: query
-        description: Restringe el resultado a una categoría de la empresa.
+        description: Restringe el resultado a una categoría de la empresa. Una categoría inexistente o ajena devuelve una lista vacía.
         schema:
           "$ref": "#/components/schemas/Uuid"
       - name: is_active
         in: query
-        description: Filtra por estado. EMPLOYEE solo puede consultar productos activos.
+        description: Filtra por estado. EMPLOYEE solo puede consultar productos activos y recibe una lista vacía si pide inactivos.
         schema:
           type: boolean
       - name: low_stock
@@ -631,6 +631,10 @@ paths:
           "$ref": "#/components/responses/NotFound"
         '409':
           "$ref": "#/components/responses/Conflict"
+        '413':
+          "$ref": "#/components/responses/PayloadTooLarge"
+        '415':
+          "$ref": "#/components/responses/UnsupportedMediaType"
         '500':
           "$ref": "#/components/responses/InternalError"
   "/businesses/{business_id}/inventory/products/{product_id}":
@@ -694,6 +698,10 @@ paths:
           "$ref": "#/components/responses/NotFound"
         '409':
           "$ref": "#/components/responses/Conflict"
+        '413':
+          "$ref": "#/components/responses/PayloadTooLarge"
+        '415':
+          "$ref": "#/components/responses/UnsupportedMediaType"
         '500':
           "$ref": "#/components/responses/InternalError"
   "/businesses/{business_id}/inventory/movements":

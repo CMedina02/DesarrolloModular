@@ -8,6 +8,7 @@ import { inventoryModuleKey } from "./core/modules/catalog.js";
 import { createModuleRouter } from "./core/modules/routes.js";
 import { requireBusinessScope } from "./core/security/business-scope.js";
 import { createCategoryRouter } from "./modules/inventory/categories/routes.js";
+import { createProductRouter } from "./modules/inventory/products/routes.js";
 
 const bodyErrors = {
   "entity.parse.failed": [400, "VALIDATION_ERROR", "El cuerpo JSON no es válido."],
@@ -17,7 +18,7 @@ const bodyErrors = {
   "encoding.unsupported": [415, "UNSUPPORTED_MEDIA_TYPE", "Envía JSON sin compresión en application/json."],
 };
 
-export function createApp({ checkDatabase, auth, businesses, businessUsers, businessModules, authorizedWrite, categories }) {
+export function createApp({ checkDatabase, auth, businesses, businessUsers, businessModules, authorizedWrite, categories, products }) {
   const app = express();
   app.disable("x-powered-by");
 
@@ -47,14 +48,15 @@ export function createApp({ checkDatabase, auth, businesses, businessUsers, busi
   }));
 
   app.use("/api/v1/businesses", createModuleRouter({ businessModules, requireSession, authorizedWrite }));
-  const writeCategories = createModuleWrite(authorizedWrite, businessModules, inventoryModuleKey);
+  const writeInventory = createModuleWrite(authorizedWrite, businessModules, inventoryModuleKey);
   app.use(
     "/api/v1/businesses/:businessId/inventory",
     requireSession,
     requireRoles("ADMIN", "EMPLOYEE"),
     requireBusinessScope,
     requireEnabledModule(businessModules, inventoryModuleKey),
-    createCategoryRouter({ categories, writeCategories })
+    createCategoryRouter({ categories, writeCategories: writeInventory }),
+    createProductRouter({ products, writeInventory })
   );
 
   app.use((_request, response) => notFound(response));

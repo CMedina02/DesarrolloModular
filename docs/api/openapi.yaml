@@ -328,7 +328,7 @@ paths:
       - Módulos
       summary: Consultar módulos de una empresa
       operationId: listModules
-      description: Los usuarios de empresa pueden consultar los módulos de su propia empresa. PLATFORM_ADMIN puede consultar los de cualquier empresa de la instalación.
+      description: Los usuarios de empresa pueden consultar los módulos de su propia empresa. PLATFORM_ADMIN puede consultar los de cualquier empresa de la instalación. Inventario usa la clave inventory y empieza deshabilitado para cada empresa.
       x-roles:
       - PLATFORM_ADMIN
       - ADMIN
@@ -390,6 +390,10 @@ paths:
           "$ref": "#/components/responses/Forbidden"
         '404':
           "$ref": "#/components/responses/NotFound"
+        '413':
+          "$ref": "#/components/responses/PayloadTooLarge"
+        '415':
+          "$ref": "#/components/responses/UnsupportedMediaType"
         '500':
           "$ref": "#/components/responses/InternalError"
   "/businesses/{business_id}/inventory/categories":

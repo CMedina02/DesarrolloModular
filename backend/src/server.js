@@ -6,6 +6,7 @@ import { createAuthUsers } from "./core/auth/users.js";
 import { createBusinesses } from "./core/businesses/repository.js";
 import { readConfig, readJwtSecret } from "./core/config.js";
 import { checkDatabase, createPool } from "./core/database/pool.js";
+import { createBusinessModules } from "./core/modules/repository.js";
 import { createAuthorizedWrite } from "./core/security/authorized-write.js";
 import { createBusinessUsers } from "./core/users/repository.js";
 
@@ -16,6 +17,7 @@ async function startServer({ host, port, databaseUrl, jwtSecret }) {
     authorizedWrite: createAuthorizedWrite(pool),
     businesses: createBusinesses(pool),
     businessUsers: createBusinessUsers(pool),
+    businessModules: createBusinessModules(pool),
     auth: {
       users: createAuthUsers(pool),
       tokens: createAccessTokens(jwtSecret),

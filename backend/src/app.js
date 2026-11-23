@@ -1,8 +1,12 @@
 import express from "express";
 import { createAuthRouter } from "./core/auth/routes.js";
-import { createRequireSession } from "./core/auth/session.js";
+import { createRequireSession, requireRoles } from "./core/auth/session.js";
 import { createBusinessRouter } from "./core/businesses/routes.js";
 import { notFound, sendError } from "./core/http/errors.js";
+import { requireEnabledModule } from "./core/modules/access.js";
+import { inventoryModuleKey } from "./core/modules/catalog.js";
+import { createModuleRouter } from "./core/modules/routes.js";
+import { requireBusinessScope } from "./core/security/business-scope.js";
 
 const bodyErrors = {
   "entity.parse.failed": [400, "VALIDATION_ERROR", "El cuerpo JSON no es válido."],
@@ -12,7 +16,7 @@ const bodyErrors = {
   "encoding.unsupported": [415, "UNSUPPORTED_MEDIA_TYPE", "Envía JSON sin compresión en application/json."],
 };
 
-export function createApp({ checkDatabase, auth, businesses, businessUsers, authorizedWrite }) {
+export function createApp({ checkDatabase, auth, businesses, businessUsers, businessModules, authorizedWrite }) {
   const app = express();
   app.disable("x-powered-by");
 
@@ -40,6 +44,15 @@ export function createApp({ checkDatabase, auth, businesses, businessUsers, auth
     requireSession,
     authorizedWrite,
   }));
+
+  app.use("/api/v1/businesses", createModuleRouter({ businessModules, requireSession, authorizedWrite }));
+  app.use(
+    "/api/v1/businesses/:businessId/inventory",
+    requireSession,
+    requireRoles("ADMIN", "EMPLOYEE"),
+    requireBusinessScope,
+    requireEnabledModule(businessModules, inventoryModuleKey)
+  );
 
   app.use((_request, response) => notFound(response));
 

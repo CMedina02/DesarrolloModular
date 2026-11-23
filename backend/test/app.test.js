@@ -360,3 +360,71 @@ test("una autorización revocada durante una escritura conserva el código HTTP 
   assert.equal(authorizedWrite.mock.callCount(), 3);
   assert.equal(update.mock.callCount(), 0);
 });
+
+test("módulos permite consulta por empresa y oculta empresas ajenas", async (t) => {
+  const list = t.mock.fn(async () => [{ key: "inventory", enabled: false }]);
+  const client = await administrationClient(t, "EMPLOYEE", { businessModules: { list } });
+  const own = await client(`/${companyId}/modules`);
+  assert.equal(own.status, 200);
+  assert.deepEqual(await own.json(), [{ key: "inventory", enabled: false }]);
+  assert.equal(own.headers.get("cache-control"), "no-store");
+
+  const crossScope = await client(`/${otherCompanyId}/modules`, {
+    extraHeaders: { "x-business-id": companyId, "x-role": "PLATFORM_ADMIN" },
+  });
+  assert.equal(crossScope.status, 404);
+  assert.deepEqual(list.mock.calls[0].arguments, [companyId]);
+  assert.equal(list.mock.callCount(), 1);
+});
+
+test("solo PLATFORM_ADMIN puede guardar un booleano para un módulo registrado", async (t) => {
+  const setEnabled = t.mock.fn(async (_client, id, key, enabled) =>
+    id === companyId ? { key, enabled } : undefined
+  );
+  const administration = { businessModules: { setEnabled } };
+  const admin = await administrationClient(t, "ADMIN", administration);
+  const platform = await administrationClient(t, "PLATFORM_ADMIN", administration);
+  const path = `/${companyId}/modules/inventory`;
+  const put = (client, url, body) => client(url, { method: "PUT", body });
+
+  assert.equal((await put(admin, path, { enabled: true })).status, 403);
+  assert.equal((await put(platform, `/${companyId}/modules/sales`, { enabled: true })).status, 400);
+  for (const body of [{}, { enabled: "false" }, { enabled: true, business_id: otherCompanyId }, [true]]) {
+    assert.equal((await put(platform, path, body)).status, 400);
+  }
+  assert.equal(setEnabled.mock.callCount(), 0);
+
+  for (const enabled of [true, true, false]) {
+    const response = await put(platform, path, { enabled });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { key: "inventory", enabled });
+    assert.deepEqual(setEnabled.mock.calls.at(-1).arguments, [writeClient, companyId, "inventory", enabled]);
+  }
+  const missing = await put(platform, `/${otherCompanyId}/modules/inventory`, { enabled: true });
+  assert.equal(missing.status, 404);
+});
+
+test("Inventario aplica sesión, rol, alcance y habilitación antes del módulo", async (t) => {
+  let enabled = false;
+  const isEnabled = t.mock.fn(async () => enabled);
+  const administration = { businessModules: { isEnabled } };
+  const employee = await administrationClient(t, "EMPLOYEE", administration);
+  const platform = await administrationClient(t, "PLATFORM_ADMIN", administration);
+  const anonymous = await listen(t, async () => {});
+  const path = `/${companyId}/inventory/categories`;
+
+  assert.equal((await fetch(anonymous + businessesPath + path)).status, 401);
+  assert.equal((await platform(path)).status, 403);
+  assert.equal((await employee(`/${otherCompanyId}/inventory/categories`)).status, 404);
+  assert.equal(isEnabled.mock.callCount(), 0);
+
+  const disabled = await employee(path);
+  assert.equal(disabled.status, 403);
+  assert.equal((await disabled.json()).error.code, "FORBIDDEN");
+  assert.deepEqual(isEnabled.mock.calls[0].arguments, [companyId, "inventory"]);
+  enabled = true;
+  const passesGuard = await employee(path);
+  assert.equal(passesGuard.status, 404);
+  assert.equal((await passesGuard.json()).error.code, "NOT_FOUND");
+  assert.equal(isEnabled.mock.callCount(), 2);
+});

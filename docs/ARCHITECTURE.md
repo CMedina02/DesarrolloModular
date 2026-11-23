@@ -28,7 +28,7 @@ Las contraseñas llegan por HTTPS y se almacenan como hashes. Los perfiles omite
 
 ## Activación y desactivación
 
-Los módulos se distribuyen dentro de la aplicación. El Core controla el estado de cada módulo por empresa. Express comprueba ese estado en todas las operaciones de Inventario y Flutter puede consultarlo para decidir qué funciones mostrar. Desactivar Inventario bloquea sus operaciones para esa empresa y conserva el catálogo, el stock y el historial. B06 definirá la persistencia con una migración versionada.
+Los módulos se distribuyen dentro de la aplicación. El Core registra Inventario con la clave `inventory` y guarda su habilitación por empresa. Su estado inicial es deshabilitado. Express comprueba ese estado al entrar a las rutas de Inventario y Flutter puede consultarlo para decidir qué funciones mostrar. Desactivar Inventario conserva el catálogo, el stock y el historial. [Registro de módulos y migración de B06](tasks/backend/B06.md).
 
 ## Catálogo, stock e historial
 

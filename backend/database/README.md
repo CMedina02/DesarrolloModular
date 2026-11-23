@@ -17,6 +17,19 @@ psql -X -v ON_ERROR_STOP=1 -d inventario_comercial_dev -f backend/database/003_p
 
 `001_schema.sql` se ejecuta una vez sobre una base vacía. `002_datos_demo.sql` agrega dos comercios y un catálogo de ejemplo; no crea credenciales. No ejecutar los datos demo en producción. `003_pruebas.sql` usa una transacción y termina con `ROLLBACK`. Para pruebas aisladas, ejecútalo después del esquema; no depende de los datos demo.
 
+## Migración de módulos B06
+
+Después de instalar el esquema T02, aplica una sola vez la migración
+[`004_business_modules.sql`](migrations/004_business_modules.sql):
+
+```bash
+psql -X -v ON_ERROR_STOP=1 -d inventario_comercial_dev -f backend/database/migrations/004_business_modules.sql
+```
+
+En una base existente que ya tenga T02, ejecuta únicamente la migración.
+Agrega la tabla `business_modules` y conserva las empresas, las cuentas y los datos
+de Inventario. Los pasos para habilitar Inventario por empresa están en [B06](../../docs/tasks/backend/B06.md).
+
 ## Tablas
 
 - `businesses`: negocios y estado.

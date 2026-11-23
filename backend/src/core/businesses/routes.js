@@ -1,9 +1,10 @@
 import express from "express";
 import { hashPassword } from "../auth/password.js";
-import { forbidden, requireRoles, unauthorized } from "../auth/session.js";
+import { requireRoles } from "../auth/session.js";
 import { notFound, sendError } from "../http/errors.js";
 import { jsonBody } from "../http/json.js";
 import { requireBusinessScope } from "../security/business-scope.js";
+import { respondToAuthorizedWrite } from "../security/write-response.js";
 import { isUuid } from "../validation.js";
 import { businessInput, pagination, userInput } from "./input.js";
 
@@ -13,20 +14,7 @@ function mayManageAdmins(request) {
 
 async function respondToWrite(response, status, save) {
   try {
-    const outcome = await save();
-
-    switch (outcome.status) {
-      case "authorized":
-        return outcome.resource ? response.status(status).json(outcome.resource) : notFound(response);
-      case "unauthenticated":
-        return unauthorized(response.set("WWW-Authenticate", "Bearer"));
-      case "forbidden":
-        return forbidden(response);
-      case "out_of_scope":
-        return notFound(response);
-      default:
-        throw new Error("Resultado de autorización desconocido.");
-    }
+    return respondToAuthorizedWrite(response, status, await save());
   } catch (error) {
     if (error.code === "23505" && error.constraint === "users_email_ci_uniq") {
       return sendError(response, 409, "CONFLICT", "El correo ya está registrado.");

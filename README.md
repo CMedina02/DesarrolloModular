@@ -23,3 +23,8 @@ Consulta [B02](docs/tasks/backend/B02.md) para ver la configuración y las prueb
 
 Consulta [B03](docs/tasks/backend/B03.md) para generar la clave, crear el primer
 administrador y probar `POST /api/v1/auth/login` y `GET /api/v1/auth/me`.
+
+La suite de integración usa PostgreSQL real y se ejecuta con
+`npm run test:integration` desde `backend/`. Configura
+`INTEGRATION_DATABASE_URL` con una base de pruebas siguiendo
+[B11](docs/tasks/backend/B11.md).

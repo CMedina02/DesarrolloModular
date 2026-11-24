@@ -26,7 +26,7 @@ test/                                # Pruebas unitarias, de widgets y flujo E2E
 ## Requisitos locales
 
 - Flutter SDK `3.47.4` (Dart `3.13.3`) en `PATH`.
-- **Web (Microsoft Edge):** objetivo comprobado en Windows sin Visual Studio.
+- **Web:** navegador compatible con Flutter Web.
 - **Windows escritorio (`-d windows`):** requiere Visual Studio con la carga de trabajo **Desktop development with C++**.
 - **Android:** requiere Android SDK (`cmdline-tools`) y licencias aceptadas (`flutter doctor --android-licenses`).
 
@@ -38,23 +38,29 @@ Desde `mobile/`:
 flutter pub get
 flutter analyze
 flutter test
-flutter build web --dart-define=API_BASE_URL=http://127.0.0.1:3000
+flutter build web --no-web-resources-cdn
 ```
 
 ## Arranque contra backend real
 
-### 1. Entorno backend requerido
-- Rama de referencia del backend: `devBackend` (`98d5fab`, B01–B09; requiere **B10** para consultar el historial real `GET /inventory/movements`).
-- Base PostgreSQL con esquema T02 (`001_schema.sql`), migración B06 (`004_business_modules.sql`), dos empresas de prueba, módulo `inventory` habilitado y cuentas de prueba (`PLATFORM_ADMIN`, `ADMIN` y `EMPLOYEE`).
-- Servidor Express escuchando en `http://127.0.0.1:3000` (o URL compartida acordada con Dev 1).
+### Web
 
-### 2. Comandos de arranque del cliente
+Sigue el [arranque web local](../README.md#arranque-web-local). Si
+`API_BASE_URL` se omite, Flutter Web usa el origen de la página. El modo web
+de Express sirve la compilación y la API en ese mismo origen.
+
+Para los flujos con roles, prepara PostgreSQL siguiendo la [guía B12](../docs/tasks/backend/B12.md).
+Crea cuentas de prueba para `PLATFORM_ADMIN`, `ADMIN` y `EMPLOYEE`, y activa
+Inventario para la empresa de prueba.
+
+### Clientes nativos
+
+Selecciona el dispositivo con `flutter devices`. El emulador Android usa
+`10.0.2.2` para conectarse al host de desarrollo. Para un teléfono físico,
+usa una URL HTTPS de la API accesible desde el dispositivo.
 
 ```bash
-# Web (Microsoft Edge)
-flutter run -d edge --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=APP_ENV=development
-
-# Windows escritorio (requiere Visual Studio C++; sin restricciones CORS)
+# Windows escritorio
 flutter run -d windows --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=APP_ENV=development
 
 # Emulador Android (apuntando al host local)
@@ -66,7 +72,7 @@ flutter run -d android --dart-define=API_BASE_URL=http://10.0.2.2:3000 --dart-de
 ## Lista de comprobación manual E2E (F09)
 
 1. **Instalación:** `flutter pub get`, `flutter analyze`, `flutter test` y arranque en el objetivo elegido.
-2. **Flujo `ADMIN`:** login → crear categoría → crear producto (`19.90`, stock `0.000`) → entrada → salida → ajuste → consultar historial *(requiere B10)*.
+2. **Flujo `ADMIN`:** login → crear categoría → crear producto (`19.90`, stock `0.000`) → entrada → salida → ajuste → consultar historial.
 3. **Flujo `EMPLOYEE`:** login → consultar productos activos → registrar entrada/salida → confirmar ausencia de edición, ajuste, empleados e historial.
 4. **Aislamiento:** cerrar sesión e ingresar con cuenta de segunda empresa; verificar catálogos y saldos separados y limpieza del estado anterior.
 5. **Recuperación:** credenciales inválidas (`401`), sesión vencida (900 s), módulo Inventario deshabilitado (`enabled: false`), pérdida de conexión (confirmación incierta + verificar saldo), stock insuficiente (`409`) y listas vacías.

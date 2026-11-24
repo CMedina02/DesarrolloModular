@@ -10,8 +10,9 @@ import { createCategories } from "./modules/inventory/categories/repository.js";
 import { createMovements } from "./modules/inventory/movements/repository.js";
 import { createProducts } from "./modules/inventory/products/repository.js";
 
-export function createBackendApp(pool, jwtSecret) {
+export function createBackendApp(pool, jwtSecret, { webDirectory } = {}) {
   return createApp({
+    webDirectory,
     checkDatabase: () => checkDatabase(pool),
     authorizedWrite: createAuthorizedWrite(pool),
     businesses: createBusinesses(pool),

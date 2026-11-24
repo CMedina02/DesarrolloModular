@@ -1,12 +1,32 @@
 import { once } from "node:events";
+import { access } from "node:fs/promises";
 import { createServer } from "node:http";
+import { fileURLToPath } from "node:url";
 import { createBackendApp } from "./backend-app.js";
 import { readConfig, readJwtSecret } from "./core/config.js";
 import { createPool } from "./core/database/pool.js";
 
-async function startServer({ host, port, databaseUrl, jwtSecret }) {
+const flutterWebBuild = new URL("../../mobile/build/web/", import.meta.url);
+
+async function readWebDirectory(args) {
+  if (!args.includes("--web")) {
+    return undefined;
+  }
+
+  try {
+    await Promise.all(["index.html", "flutter_bootstrap.js"].map((file) =>
+      access(new URL(file, flutterWebBuild))
+    ));
+  } catch {
+    throw new Error("Falta la compilación web. Ejecuta flutter build web desde mobile/.");
+  }
+
+  return fileURLToPath(flutterWebBuild);
+}
+
+async function startServer({ host, port, databaseUrl, jwtSecret, webDirectory }) {
   const pool = createPool(databaseUrl);
-  const app = createBackendApp(pool, jwtSecret);
+  const app = createBackendApp(pool, jwtSecret, { webDirectory });
   const server = createServer(app);
 
   try {
@@ -45,7 +65,7 @@ async function startServer({ host, port, databaseUrl, jwtSecret }) {
 
 let config;
 try {
-  config = { ...readConfig(), jwtSecret: readJwtSecret() };
+  config = { ...readConfig(), jwtSecret: readJwtSecret(), webDirectory: await readWebDirectory(process.argv.slice(2)) };
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;

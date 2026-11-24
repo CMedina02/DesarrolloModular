@@ -22,10 +22,10 @@ class AppConfig {
 
   /// Reads compile-time environment variables passed via `--dart-define`.
   factory AppConfig.fromEnvironment() {
-    const rawApiBaseUrl = String.fromEnvironment(
-      'API_BASE_URL',
-      defaultValue: defaultApiBaseUrl,
-    );
+    const configuredApiBaseUrl = String.fromEnvironment('API_BASE_URL');
+    final rawApiBaseUrl = configuredApiBaseUrl.trim().isEmpty && kIsWeb
+        ? Uri.base.origin
+        : configuredApiBaseUrl;
     const rawEnvironment = String.fromEnvironment(
       'APP_ENV',
       defaultValue: defaultEnvironment,

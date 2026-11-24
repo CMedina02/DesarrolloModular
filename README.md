@@ -6,8 +6,23 @@ Repositorio para una plataforma modular orientada a pequeños comercios. El prim
 
 - `backend/database/`: esquema PostgreSQL, datos de demostración y pruebas de integridad de T02.
 - `backend/src/`: servidor Express, configuración y acceso compartido a PostgreSQL.
-- `mobile/`: reservado para la aplicación Flutter de etapas posteriores.
+- `mobile/`: aplicación Flutter de Inventario Comercial para web, con proyecto Android.
 - `docs/`: documentación del proyecto.
+
+## Arranque web local
+
+Prepara primero PostgreSQL y la configuración del backend con la guía de
+instalación de abajo. Desde la raíz del repositorio, compila el cliente y
+arranca Express en modo web.
+
+```bash
+(cd mobile && flutter pub get && flutter build web --no-web-resources-cdn)
+(cd backend && npm run start:web)
+```
+
+Abre [la aplicación](http://127.0.0.1:3000). Express sirve Flutter y la API
+desde la misma dirección. Para publicar este modo web, usa HTTPS en el
+dominio público y conserva la API bajo ese mismo origen.
 
 ## Instalación del backend
 

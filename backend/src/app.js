@@ -19,7 +19,7 @@ const bodyErrors = {
   "encoding.unsupported": [415, "UNSUPPORTED_MEDIA_TYPE", "Envía JSON sin compresión en application/json."],
 };
 
-export function createApp({ checkDatabase, auth, businesses, businessUsers, businessModules, authorizedWrite, categories, products, movements }) {
+export function createApp({ checkDatabase, auth, businesses, businessUsers, businessModules, authorizedWrite, categories, products, movements, webDirectory }) {
   const app = express();
   app.disable("x-powered-by");
 
@@ -60,6 +60,14 @@ export function createApp({ checkDatabase, auth, businesses, businessUsers, busi
     createProductRouter({ products, writeInventory }),
     createMovementRouter({ products, movements, writeInventory })
   );
+
+  if (webDirectory) {
+    app.use("/api", (_request, response) => notFound(response));
+    app.use(express.static(webDirectory, {
+      redirect: false,
+      setHeaders: (response) => response.setHeader("X-Content-Type-Options", "nosniff"),
+    }));
+  }
 
   app.use((_request, response) => notFound(response));
 

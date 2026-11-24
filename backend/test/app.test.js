@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { hashPassword } from "../src/core/auth/password.js";
@@ -66,6 +69,45 @@ test("una ruta desconocida devuelve 404 con el formato JSON de B01", async (t) =
   assert.deepEqual(await response.json(), {
     error: { code: "NOT_FOUND", message: "No se encontró el recurso." },
   });
+});
+
+test("el modo web sirve Flutter y reserva las rutas de la API", async (t) => {
+  const webDirectory = await mkdtemp(join(tmpdir(), "desarrollo-web-test-"));
+  t.after(() => rm(webDirectory, { recursive: true, force: true }));
+  const apiDirectory = join(webDirectory, "api", "v1");
+  await mkdir(apiDirectory, { recursive: true });
+  await Promise.all([
+    writeFile(join(webDirectory, "index.html"), "<!doctype html><title>Inventario</title>"),
+    writeFile(join(webDirectory, "engine.wasm"), Buffer.from([0, 97, 115, 109])),
+    writeFile(join(apiDirectory, "unknown"), "archivo estático"),
+  ]);
+
+  const baseUrl = await listen(t, async () => {}, undefined, { webDirectory });
+  const index = await fetch(baseUrl);
+  assert.equal(index.status, 200);
+  assert.match(index.headers.get("content-type"), /^text\/html/);
+  assert.match(await index.text(), /<title>Inventario<\/title>/);
+
+  const engine = await fetch(`${baseUrl}/engine.wasm`);
+  assert.equal(engine.status, 200);
+  assert.equal(engine.headers.get("content-type"), "application/wasm");
+  assert.equal(engine.headers.get("x-content-type-options"), "nosniff");
+  await engine.arrayBuffer();
+
+  const health = await fetch(`${baseUrl}/health/db`);
+  assert.equal(health.status, 200);
+  assert.deepEqual(await health.json(), { status: "ok" });
+
+  const unknown = await fetch(`${baseUrl}/api/v1/unknown`);
+  assert.equal(unknown.status, 404);
+  assert.equal((await unknown.json()).error.code, "NOT_FOUND");
+});
+
+test("el modo API responde 404 en la raíz", async (t) => {
+  const baseUrl = await listen(t, async () => {});
+  const response = await fetch(baseUrl);
+  assert.equal(response.status, 404);
+  assert.equal((await response.json()).error.code, "NOT_FOUND");
 });
 
 const authPath = "/api/v1/auth";

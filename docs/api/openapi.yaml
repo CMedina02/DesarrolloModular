@@ -720,7 +720,7 @@ paths:
       - "$ref": "#/components/parameters/Offset"
       - name: product_id
         in: query
-        description: Filtra por producto de la empresa, incluso si está inactivo.
+        description: Filtra por producto de la empresa, incluso si está inactivo. Un producto inexistente o ajeno devuelve una lista vacía.
         schema:
           "$ref": "#/components/schemas/Uuid"
       - name: movement_type
@@ -730,12 +730,12 @@ paths:
           "$ref": "#/components/schemas/MovementType"
       - name: from
         in: query
-        description: Fecha y hora de inicio, inclusiva.
+        description: Fecha y hora de inicio, inclusiva. Requiere zona horaria y admite hasta seis decimales en los segundos.
         schema:
           "$ref": "#/components/schemas/Timestamp"
       - name: to
         in: query
-        description: Fecha y hora de fin, exclusiva y posterior a from cuando ambos se indican.
+        description: Fecha y hora de fin, exclusiva y posterior a from cuando ambos se indican. Requiere zona horaria y admite hasta seis decimales en los segundos.
         schema:
           "$ref": "#/components/schemas/Timestamp"
       responses:

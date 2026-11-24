@@ -1,13 +1,25 @@
 import express from "express";
-import { forbidden } from "../../../core/auth/session.js";
+import { forbidden, requireRoles } from "../../../core/auth/session.js";
 import { sendError } from "../../../core/http/errors.js";
 import { jsonBody } from "../../../core/http/json.js";
+import { pagination } from "../../../core/http/pagination.js";
 import { respondToAuthorizedWrite } from "../../../core/security/write-response.js";
-import { movementInput } from "./input.js";
+import { movementFilters, movementInput } from "./input.js";
 import { calculateStock, StockError } from "./stock.js";
 
 export function createMovementRouter({ products, movements, writeInventory }) {
   const router = express.Router();
+
+  router.get("/movements", requireRoles("ADMIN"), async (request, response) => {
+    const page = pagination(request.query);
+    const filters = movementFilters(request.query);
+    if (!page || !filters) {
+      return sendError(response, 400, "VALIDATION_ERROR", "Revisa la paginación y los filtros de movimientos.");
+    }
+
+    const items = await movements.list(request.businessId, { ...page, ...filters });
+    return response.json({ items, ...page });
+  });
 
   router.post("/movements", jsonBody, async (request, response) => {
     const movement = movementInput(request.body);

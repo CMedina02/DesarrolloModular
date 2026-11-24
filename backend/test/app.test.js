@@ -424,8 +424,8 @@ test("Inventario aplica sesión, rol, alcance y habilitación antes del módulo"
   assert.deepEqual(isEnabled.mock.calls[0].arguments, [companyId, "inventory"]);
   enabled = true;
   const passesGuard = await employee(path);
-  assert.equal(passesGuard.status, 404);
-  assert.equal((await passesGuard.json()).error.code, "NOT_FOUND");
+  assert.equal(passesGuard.status, 403);
+  assert.equal((await passesGuard.json()).error.message, "La operación no está disponible para la sesión actual.");
   assert.equal(isEnabled.mock.callCount(), 2);
 });
 
@@ -730,4 +730,67 @@ test("los movimientos rechazan producto inaccesible o inactivo, fracciones y sal
 
   assert.equal(setStock.mock.callCount(), 0);
   assert.equal(create.mock.callCount(), 0);
+});
+
+test("el historial usa la empresa autorizada y conserva filtros y paginación", async (t) => {
+  const movement = { id: employeeId, product_id: productId, stock_after: "0.200" };
+  const list = t.mock.fn(async () => [movement]);
+  const deps = { businessModules: { isEnabled: async () => true }, movements: { list } };
+  const admin = await administrationClient(t, "ADMIN", deps);
+  const employee = await administrationClient(t, "EMPLOYEE", deps);
+
+  assert.equal((await employee(movementsPath)).status, 403);
+  assert.equal((await admin(`/${otherCompanyId}/inventory/movements`)).status, 404);
+  assert.equal(list.mock.callCount(), 0);
+
+  const query = new URLSearchParams({
+    product_id: productId,
+    movement_type: "OUT",
+    from: "2026-11-24T10:00:00.000001-06:00",
+    to: "2026-11-24T16:00:00.000002Z",
+    limit: "5",
+    offset: "2",
+    business_id: otherCompanyId,
+  });
+  const response = await admin(movementsPath + "?" + query);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { items: [movement], limit: 5, offset: 2 });
+  assert.deepEqual(list.mock.calls[0].arguments, [companyId, {
+    productId, type: "OUT", from: "2026-11-24T16:00:00.000001Z",
+    to: "2026-11-24T16:00:00.000002Z", limit: 5, offset: 2,
+  }]);
+});
+
+test("el historial rechaza filtros inválidos y rangos invertidos o equivalentes", async (t) => {
+  const list = t.mock.fn(async () => []);
+  const admin = await administrationClient(t, "ADMIN", {
+    businessModules: { isEnabled: async () => true },
+    movements: { list },
+  });
+  const invalid = [
+    { product_id: "sin-uuid" },
+    { movement_type: "in" },
+    { limit: "101" },
+    { offset: "-1" },
+    { from: "2026-02-29T10:00:00Z" },
+    { from: "2026-11-24T10:00:00" },
+    { from: "2026-11-24T24:00:00Z" },
+    { from: "2026-11-24T10:00:00+06:60" },
+    { from: "2026-11-24T10:00:00.0000001Z" },
+    { from: "2026-11-24T10:00:00-06:00", to: "2026-11-24T16:00:00Z" },
+    { from: "2026-11-24T16:00:00.000002Z", to: "2026-11-24T16:00:00.000001Z" },
+  ];
+  for (const query of invalid) {
+    const response = await admin(movementsPath + "?" + new URLSearchParams(query));
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error.code, "VALIDATION_ERROR");
+  }
+  assert.equal((await admin(movementsPath + "?movement_type=IN&movement_type=OUT")).status, 400);
+  assert.equal(list.mock.callCount(), 0);
+
+  const empty = await admin(movementsPath);
+  assert.deepEqual(await empty.json(), { items: [], limit: 25, offset: 0 });
+  const valid = await admin(movementsPath + "?" + new URLSearchParams({ to: "2028-02-29T00:15:00+01:00" }));
+  assert.equal(valid.status, 200);
+  assert.equal(list.mock.calls[1].arguments[1].to, "2028-02-28T23:15:00.000000Z");
 });

@@ -9,22 +9,23 @@ Repositorio para una plataforma modular orientada a pequeños comercios. El prim
 - `mobile/`: reservado para la aplicación Flutter de etapas posteriores.
 - `docs/`: documentación del proyecto.
 
-Consulta [`backend/database/README.md`](backend/database/README.md) para preparar y validar la base local. Los datos de demostración son solo para desarrollo.
+## Instalación del backend
 
-## Arranque del backend
+Requiere Node.js 22.21 o posterior y una base PostgreSQL. Desde `backend/`,
+instala las dependencias con `npm ci` y prepara `.env` a partir de
+`.env.example`. Configura `DATABASE_URL` y una clave `JWT_SECRET`.
 
-Desde `backend/`, instala con `npm ci` y configura `.env` a partir de
-`.env.example` con tu conexión PostgreSQL local y una clave `JWT_SECRET`. Ejecuta `npm start` para
-arrancar Express y `npm test` para correr las pruebas automatizadas. Requiere
-Node.js 22.21 o posterior.
+En una base vacía, ejecuta `npm run migrate`. Si ya instalaste T02 con los
+scripts oficiales, consulta el procedimiento de adopción antes de migrar.
+Después puedes inicializar el administrador con `npm run bootstrap:admin` según
+la guía y arrancar con `npm start`. [Guía de instalación B12](docs/tasks/backend/B12.md)
 
-`GET /health` comprueba el servidor y `GET /health/db` comprueba PostgreSQL.
-Consulta [B02](docs/tasks/backend/B02.md) para ver la configuración y las pruebas.
+`GET /health` comprueba Express y `GET /health/db` comprueba PostgreSQL.
+Para probar la API, consulta [B03](docs/tasks/backend/B03.md) y
+[B06](docs/tasks/backend/B06.md).
 
-Consulta [B03](docs/tasks/backend/B03.md) para generar la clave, crear el primer
-administrador y probar `POST /api/v1/auth/login` y `GET /api/v1/auth/me`.
+## Pruebas
 
-La suite de integración usa PostgreSQL real y se ejecuta con
-`npm run test:integration` desde `backend/`. Configura
-`INTEGRATION_DATABASE_URL` con una base de pruebas siguiendo
-[B11](docs/tasks/backend/B11.md).
+Ejecuta `npm test` desde `backend/`. Para las pruebas HTTP contra PostgreSQL real
+y las de migraciones, configura `INTEGRATION_DATABASE_URL` y ejecuta
+`npm run test:integration`. [Suite de integración B11](docs/tasks/backend/B11.md)

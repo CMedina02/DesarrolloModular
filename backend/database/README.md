@@ -1,34 +1,29 @@
-# Base de datos — Inventario Comercial 1.0 (T02)
+# Base de datos de Inventario Comercial 1.0
 
 ## Requisitos
 
 PostgreSQL 13 o posterior y `psql`. El esquema usa UUID generados con `gen_random_uuid()` (disponible en versiones actuales de PostgreSQL).
 
-## Preparación local
+## Instalación y migraciones
 
-Crea una base de desarrollo vacía con una cuenta local autorizada:
+Desde `backend/`, configura `DATABASE_URL` y ejecuta `npm run migrate`.
+Para incorporar una base existente instalada con los scripts oficiales de T02
+o B06, sigue el procedimiento de adopción.
+[Guía de instalación B12](../../docs/tasks/backend/B12.md)
+
+El comando aplica `001_schema.sql` y las migraciones versionadas, incluida
+`004_business_modules.sql`. Los scripts de demostración y pruebas se ejecutan
+de forma independiente sobre una base de desarrollo. Desde la raíz del repositorio,
+con `psql` y la base de desarrollo seleccionada, puedes ejecutar:
 
 ```bash
-createdb inventario_comercial_dev
-psql -X -v ON_ERROR_STOP=1 -d inventario_comercial_dev -f backend/database/001_schema.sql
 psql -X -v ON_ERROR_STOP=1 -d inventario_comercial_dev -f backend/database/002_datos_demo.sql
 psql -X -v ON_ERROR_STOP=1 -d inventario_comercial_dev -f backend/database/003_pruebas.sql
 ```
 
-`001_schema.sql` se ejecuta una vez sobre una base vacía. `002_datos_demo.sql` agrega dos comercios y un catálogo de ejemplo; no crea credenciales. No ejecutar los datos demo en producción. `003_pruebas.sql` usa una transacción y termina con `ROLLBACK`. Para pruebas aisladas, ejecútalo después del esquema; no depende de los datos demo.
-
-## Migración de módulos B06
-
-Después de instalar el esquema T02, aplica una sola vez la migración
-[`004_business_modules.sql`](migrations/004_business_modules.sql):
-
-```bash
-psql -X -v ON_ERROR_STOP=1 -d inventario_comercial_dev -f backend/database/migrations/004_business_modules.sql
-```
-
-En una base existente que ya tenga T02, ejecuta únicamente la migración.
-Agrega la tabla `business_modules` y conserva las empresas, las cuentas y los datos
-de Inventario. Los pasos para habilitar Inventario por empresa están en [B06](../../docs/tasks/backend/B06.md).
+`002_datos_demo.sql` agrega dos comercios y un catálogo de ejemplo.
+`003_pruebas.sql` termina con `ROLLBACK` y puede ejecutarse con el esquema de T02
+aunque la base carezca de datos demo.
 
 ## Tablas
 
@@ -37,6 +32,8 @@ de Inventario. Los pasos para habilitar Inventario por empresa están en [B06](.
 - `categories`: categorías únicas por negocio.
 - `products`: catálogo, SKU único por negocio, unidad, precios y existencia.
 - `stock_movements`: auditoría de entradas, salidas y ajustes.
+- `business_modules`: habilitación de módulos por empresa.
+- `desarrollomodular_schema_migrations`: versiones aplicadas y su firma.
 
 ## Reglas principales
 
@@ -46,4 +43,4 @@ El backend debe ejecutar cada cambio de existencias y su movimiento en una sola 
 
 ## Seguridad y pendientes
 
-No guardar contraseñas en texto plano ni secretos en el repositorio. Esta etapa no incluye bootstrap de `PLATFORM_ADMIN`; los datos demo omiten usuarios para no distribuir credenciales conocidas. En producción, usar una cuenta de base de datos con privilegios mínimos y restringir la escritura a la API. Las pruebas SQL no cubren concurrencia ni autorización de API; corresponden a etapas posteriores.
+No guardar contraseñas en texto plano ni secretos en el repositorio. El primer `PLATFORM_ADMIN` se crea con el comando descrito en B03. Los datos demo contienen empresas y catálogo. En producción, usar una cuenta de base de datos con privilegios mínimos y restringir la escritura a la API. Las pruebas de concurrencia y autorización de API se detallan en [B11](../../docs/tasks/backend/B11.md).

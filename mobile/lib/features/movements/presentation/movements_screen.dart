@@ -102,12 +102,13 @@ class _MovementsScreenState extends ConsumerState<MovementsScreen> {
         _reasonController.clear();
       });
 
-      // Refresh catalog and product detail caches so updated balance is reflected.
+      // Refresh catalog, product detail, and history caches.
       ref.invalidate(activeProductsSelectorProvider(_businessId));
       ref.invalidate(
         productDetailProvider((businessId: _businessId, productId: product.id)),
       );
       ref.invalidate(productsPageProvider);
+      ref.invalidate(movementsHistoryProvider);
     } on ApiException catch (e) {
       if (e.isAuthFailure) {
         await ref

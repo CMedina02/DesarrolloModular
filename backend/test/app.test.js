@@ -645,3 +645,89 @@ test("el SKU duplicado devuelve 409 y una categoría no disponible devuelve 404"
   assert.equal(second.status, 404);
   assert.equal((await second.json()).error.code, "NOT_FOUND");
 });
+
+const movementsPath = `/${companyId}/inventory/movements`;
+
+test("entradas, salidas y ajustes guardan el saldo y el movimiento en el cliente autorizado", async (t) => {
+  let stock = "0.000";
+  const lockForUpdate = t.mock.fn(async () => ({ is_active: true, unit: "KG", stock_quantity: stock }));
+  const setStock = t.mock.fn(async (_client, _business, _product, after) => { stock = after; });
+  const create = t.mock.fn(async (_client, movement) => movement);
+  const administration = {
+    businessModules: { isEnabled: async () => true, lockEnabled: async () => true },
+    products: { lockForUpdate, setStock },
+    movements: { create },
+  };
+  const employee = await administrationClient(t, "EMPLOYEE", administration);
+  const admin = await administrationClient(t, "ADMIN", administration);
+
+  for (const [client, body, before, after, delta, reason] of [
+    [employee, { movement_type: "IN", quantity: "0.3" }, "0.000", "0.300", "0.300", null],
+    [employee, { movement_type: "OUT", quantity: "0.1", reason: "  Merma  " }, "0.300", "0.200", "-0.100", "Merma"],
+    [admin, { movement_type: "ADJUSTMENT", counted_quantity: "0", reason: "Conteo" }, "0.200", "0.000", "-0.200", "Conteo"],
+  ]) {
+    const response = await client(movementsPath, { method: "POST", body: { product_id: productId, ...body } });
+    assert.equal(response.status, 201);
+    const saved = await response.json();
+    assert.equal(saved.businessId, companyId);
+    assert.equal(saved.userId, userProfile.id);
+    assert.equal(saved.reason, reason);
+    assert.deepEqual([saved.before, saved.after, saved.delta], [before, after, delta]);
+    assert.deepEqual(lockForUpdate.mock.calls.at(-1).arguments, [writeClient, companyId, productId]);
+    assert.deepEqual(setStock.mock.calls.at(-1).arguments, [writeClient, companyId, productId, after]);
+    assert.equal(create.mock.calls.at(-1).arguments[0], writeClient);
+  }
+});
+
+test("el movimiento valida cantidad, motivo, autor y rol antes de tocar existencias", async (t) => {
+  const lockForUpdate = t.mock.fn();
+  const employee = await administrationClient(t, "EMPLOYEE", {
+    businessModules: { isEnabled: async () => true, lockEnabled: async () => true },
+    products: { lockForUpdate },
+  });
+  const post = body => employee(movementsPath, { method: "POST", body: { product_id: productId, ...body } });
+
+  for (const body of [
+    { movement_type: "IN", quantity: "0.000" },
+    { movement_type: "IN", quantity: 1.25 },
+    { movement_type: "IN", quantity: "1.0001" },
+    { movement_type: "IN", quantity: "1", user_id: employeeId },
+    { movement_type: "IN", quantity: "1", business_id: otherCompanyId },
+    { movement_type: "IN", quantity: "1", counted_quantity: "5" },
+    { movement_type: "OUT", quantity: "1" },
+    { movement_type: "OUT", quantity: "1", reason: " " },
+    { movement_type: "ADJUSTMENT", counted_quantity: "1", reason: " " },
+  ]) {
+    assert.equal((await post(body)).status, 400);
+  }
+
+  assert.equal((await post({ movement_type: "ADJUSTMENT", counted_quantity: "0", reason: "Conteo" })).status, 403);
+  assert.equal(lockForUpdate.mock.callCount(), 0);
+});
+
+test("los movimientos rechazan producto inaccesible o inactivo, fracciones y saldos inválidos", async (t) => {
+  let product;
+  const setStock = t.mock.fn();
+  const create = t.mock.fn();
+  const admin = await administrationClient(t, "ADMIN", {
+    businessModules: { isEnabled: async () => true, lockEnabled: async () => true },
+    products: { lockForUpdate: async () => product, setStock },
+    movements: { create },
+  });
+  const post = body => admin(movementsPath, { method: "POST", body: { product_id: productId, ...body } });
+
+  for (const [current, body, status] of [
+    [undefined, { movement_type: "IN", quantity: "1" }, 404],
+    [{ is_active: false, unit: "KG", stock_quantity: "0.000" }, { movement_type: "IN", quantity: "1" }, 409],
+    [{ is_active: true, unit: "CAJA", stock_quantity: "0.000" }, { movement_type: "IN", quantity: "0.125" }, 400],
+    [{ is_active: true, unit: "KG", stock_quantity: "1.000" }, { movement_type: "OUT", quantity: "1.001", reason: "Venta" }, 409],
+    [{ is_active: true, unit: "KG", stock_quantity: "99999999999.999" }, { movement_type: "IN", quantity: "0.001" }, 409],
+    [{ is_active: true, unit: "KG", stock_quantity: "0.000" }, { movement_type: "ADJUSTMENT", counted_quantity: "0", reason: "Conteo" }, 409],
+  ]) {
+    product = current;
+    assert.equal((await post(body)).status, status);
+  }
+
+  assert.equal(setStock.mock.callCount(), 0);
+  assert.equal(create.mock.callCount(), 0);
+});

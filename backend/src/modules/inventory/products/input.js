@@ -1,9 +1,9 @@
 import { isUuid, normalizeName } from "../../../core/validation.js";
+import { normalizeQuantity } from "../quantity.js";
 
 const units = ["PZA", "CAJA", "KG", "M", "L"];
 const required = ["category_id", "sku", "name", "unit"];
 const priceFormat = /^(0|[1-9][0-9]{0,9})(\.[0-9]{1,2})?$/;
-const quantityFormat = /^(0|[1-9][0-9]{0,10})(\.[0-9]{1,3})?$/;
 
 function decimal(value, format) {
   return typeof value === "string" && value === value.trim() && format.test(value) ? value : null;
@@ -16,7 +16,7 @@ const validators = {
   unit: (value) => units.includes(value) ? value : null,
   cost_price: (value) => decimal(value, priceFormat),
   sale_price: (value) => decimal(value, priceFormat),
-  min_stock: (value) => decimal(value, quantityFormat),
+  min_stock: normalizeQuantity,
   is_active: (value) => typeof value === "boolean" ? value : null,
 };
 
@@ -62,8 +62,4 @@ export function productFilters(query) {
   }
 
   return { categoryId, isActive, lowStock: lowStock ?? false };
-}
-
-export function fitsUnit(unit, quantity) {
-  return (unit !== "PZA" && unit !== "CAJA") || /^\d+(\.0+)?$/.test(quantity);
 }

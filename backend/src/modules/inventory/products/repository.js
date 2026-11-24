@@ -43,11 +43,19 @@ export function createProducts(pool) {
 
     async lockForUpdate(client, businessId, productId) {
       const result = await client.query(
-        `SELECT unit, stock_quantity, min_stock FROM products
+        `SELECT unit, stock_quantity, min_stock, is_active FROM products
          WHERE business_id = $1 AND id = $2 FOR UPDATE`,
         [businessId, productId]
       );
       return result.rows[0];
+    },
+
+    async setStock(client, businessId, productId, stockQuantity) {
+      await client.query(
+        `UPDATE products SET stock_quantity = $3, updated_at = clock_timestamp()
+         WHERE business_id = $1 AND id = $2`,
+        [businessId, productId, stockQuantity]
+      );
     },
 
     async hasMovements(client, businessId, productId) {

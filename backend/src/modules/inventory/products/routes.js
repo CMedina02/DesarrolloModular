@@ -5,7 +5,8 @@ import { jsonBody } from "../../../core/http/json.js";
 import { pagination } from "../../../core/http/pagination.js";
 import { respondToAuthorizedWrite } from "../../../core/security/write-response.js";
 import { isUuid } from "../../../core/validation.js";
-import { fitsUnit, productFilters, productInput } from "./input.js";
+import { fitsUnit } from "../quantity.js";
+import { productFilters, productInput } from "./input.js";
 
 class ProductWriteError extends Error {
   constructor(status, code, message) {

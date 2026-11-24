@@ -7,6 +7,10 @@ import 'package:inventario_comercial/features/admin/presentation/businesses_scre
 import 'package:inventario_comercial/features/admin/presentation/modules_screen.dart';
 import 'package:inventario_comercial/features/admin/presentation/users_screen.dart';
 import 'package:inventario_comercial/features/auth/application/auth_controller.dart';
+import 'package:inventario_comercial/features/categories/presentation/categories_screen.dart';
+import 'package:inventario_comercial/features/movements/presentation/movements_history_screen.dart';
+import 'package:inventario_comercial/features/movements/presentation/movements_screen.dart';
+import 'package:inventario_comercial/features/products/presentation/products_screen.dart';
 import 'package:inventario_comercial/features/shell/presentation/role_navigation.dart';
 
 /// Authenticated shell displaying only the destinations permitted for [user.role].
@@ -46,9 +50,39 @@ class _RoleHomeShellState extends ConsumerState<RoleHomeShell> {
         return const ModulesScreen();
       case AppDestinationId.profile:
         return _ProfileView(user: widget.user, onSignOut: _signOut);
-      case AppDestinationId.products:
       case AppDestinationId.categories:
+        final businessId = widget.user.businessId;
+        if (businessId == null) {
+          return const Center(
+            child: Text('Tu cuenta no tiene una empresa asociada.'),
+          );
+        }
+        return _InventoryModuleGate(
+          businessId: businessId,
+          child: CategoriesScreen(currentUser: widget.user),
+        );
+      case AppDestinationId.products:
+        final businessId = widget.user.businessId;
+        if (businessId == null) {
+          return const Center(
+            child: Text('Tu cuenta no tiene una empresa asociada.'),
+          );
+        }
+        return _InventoryModuleGate(
+          businessId: businessId,
+          child: ProductsScreen(currentUser: widget.user),
+        );
       case AppDestinationId.movements:
+        final businessId = widget.user.businessId;
+        if (businessId == null) {
+          return const Center(
+            child: Text('Tu cuenta no tiene una empresa asociada.'),
+          );
+        }
+        return _InventoryModuleGate(
+          businessId: businessId,
+          child: MovementsScreen(currentUser: widget.user),
+        );
       case AppDestinationId.history:
         final businessId = widget.user.businessId;
         if (businessId == null) {
@@ -58,10 +92,7 @@ class _RoleHomeShellState extends ConsumerState<RoleHomeShell> {
         }
         return _InventoryModuleGate(
           businessId: businessId,
-          child: _SectionPlaceholderView(
-            destination: current,
-            user: widget.user,
-          ),
+          child: MovementsHistoryScreen(currentUser: widget.user),
         );
     }
   }
@@ -268,79 +299,6 @@ class _InventoryModuleGate extends ConsumerWidget {
 
         return child;
       },
-    );
-  }
-}
-
-class _SectionPlaceholderView extends StatelessWidget {
-  const _SectionPlaceholderView({
-    required this.destination,
-    required this.user,
-  });
-
-  final AppDestination destination;
-  final User user;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Card(
-            color: theme.colorScheme.surfaceContainerLow,
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        destination.icon,
-                        size: 32,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          destination.label,
-                          style: theme.textTheme.headlineSmall,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    destination.description,
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  const Divider(),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Sesión activa: ${user.name} (${user.email})',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    user.businessId != null
-                        ? 'Empresa (business_id): ${user.businessId}'
-                        : 'Ámbito: Instalación global (PLATFORM_ADMIN)',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

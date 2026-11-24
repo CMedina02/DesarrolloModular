@@ -45,7 +45,11 @@ class _AuthGateState extends ConsumerState<AuthGate> {
           ),
         );
       case AuthStatus.authenticated:
-        return RoleHomeShell(user: authState.user!);
+        final user = authState.user!;
+        return RoleHomeShell(
+          key: ValueKey(user.id),
+          user: user,
+        );
       case AuthStatus.unauthenticated:
       case AuthStatus.authenticating:
         return const LoginScreen();

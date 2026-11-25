@@ -5,6 +5,9 @@ import { readDatabaseUrl } from "../src/core/config.js";
 import { createPool } from "../src/core/database/pool.js";
 import { normalizeName } from "../src/core/validation.js";
 
+const invalidPasswordMessage =
+  `La contraseña debe tener entre ${minimumNewPasswordLength} y 256 caracteres en una línea UTF-8.`;
+
 async function readPassword(input) {
   const chunks = [];
   let size = 0;
@@ -21,7 +24,7 @@ async function readPassword(input) {
     .decode(Buffer.concat(chunks))
     .replace(/\r?\n$/, "");
   if (/[\r\n]/.test(password) || !isValidPassword(password, minimumNewPasswordLength)) {
-    throw new Error("La contraseña debe tener entre 15 y 256 caracteres en una sola línea.");
+    throw new Error(invalidPasswordMessage);
   }
 
   return password;
@@ -49,7 +52,7 @@ async function main(args, input) {
   try {
     password = await readPassword(input);
   } catch {
-    console.error("La contraseña debe tener entre 15 y 256 caracteres en una línea UTF-8.");
+    console.error(invalidPasswordMessage);
     return 1;
   }
 

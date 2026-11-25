@@ -274,7 +274,18 @@ void main() {
         );
         await tester.enterText(
           find.byKey(const Key('user_password_field')),
-          'PasswordSeguro12345!',
+          '🔒' * 7,
+        );
+        await tester.tap(find.byKey(const Key('user_save_button')));
+        await tester.pumpAndSettle();
+        expect(
+          find.text('La contraseña debe tener al menos 8 caracteres.'),
+          findsOneWidget,
+        );
+
+        await tester.enterText(
+          find.byKey(const Key('user_password_field')),
+          '🔒' * 8,
         );
         await tester.tap(find.byKey(const Key('user_save_button')));
         await tester.pumpAndSettle();

@@ -343,11 +343,11 @@ test("las cuentas nuevas guardan un hash y traducen el correo duplicado a 409", 
   });
   const profile = { name: "Persona", email: " persona@example.invalid ", role: "ADMIN" };
   const path = `/${companyId}/users`;
-  assert.equal((await client(path, { method: "POST", body: { ...profile, password: "muy-corta" } })).status, 400);
+  assert.equal((await client(path, { method: "POST", body: { ...profile, password: "x".repeat(7) } })).status, 400);
   assert.equal((await client(path, { method: "POST", body: { ...profile, password: "contraseña de prueba larga", business_id: otherCompanyId } })).status, 400);
   assert.equal(create.mock.callCount(), 0);
 
-  const response = await client(path, { method: "POST", body: { ...profile, password: "contraseña de prueba larga" } });
+  const response = await client(path, { method: "POST", body: { ...profile, password: "x".repeat(8) } });
   assert.equal(response.status, 409);
   assert.equal((await response.json()).error.code, "CONFLICT");
   const [clientUsed, id, input] = create.mock.calls[0].arguments;

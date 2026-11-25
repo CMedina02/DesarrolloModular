@@ -274,6 +274,8 @@ class _UserFormDialog extends ConsumerStatefulWidget {
 }
 
 class _UserFormDialogState extends ConsumerState<_UserFormDialog> {
+  static const _minimumPasswordLength = 8;
+
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _emailController;
@@ -468,12 +470,13 @@ class _UserFormDialogState extends ConsumerState<_UserFormDialog> {
                     enabled: !_submitting,
                     obscureText: true,
                     decoration: const InputDecoration(
-                      labelText: 'Contraseña (mínimo 15 caracteres)',
+                      labelText: 'Contraseña (mínimo $_minimumPasswordLength caracteres)',
                       border: OutlineInputBorder(),
                     ),
                     validator: (value) {
-                      if (value == null || value.length < 15) {
-                        return 'La contraseña debe tener al menos 15 caracteres.';
+                      final length = value?.runes.length ?? 0;
+                      if (length < _minimumPasswordLength) {
+                        return 'La contraseña debe tener al menos $_minimumPasswordLength caracteres.';
                       }
                       return null;
                     },

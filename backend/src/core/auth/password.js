@@ -7,7 +7,7 @@ const hashFormat = /^scrypt-v1\$([0-9a-f]{32})\$([0-9a-f]{128})$/;
 const dummySalt = randomBytes(16);
 const dummyKey = randomBytes(64);
 
-export const minimumNewPasswordLength = 15;
+export const minimumNewPasswordLength = 8;
 
 export function isValidPassword(password, minimumLength = 1) {
   if (typeof password !== "string" || !password.isWellFormed()) {

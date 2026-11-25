@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { SignJWT } from "jose";
-import { hashPassword, isValidPassword, verifyPassword } from "../src/core/auth/password.js";
+import { hashPassword, isValidPassword, minimumNewPasswordLength, verifyPassword } from "../src/core/auth/password.js";
 import { createAccessTokens } from "../src/core/auth/token.js";
 import { readJwtSecret } from "../src/core/config.js";
 
@@ -16,8 +16,8 @@ test("scrypt usa sales independientes y distingue una contraseña incorrecta", a
 });
 
 test("la validación de contraseña preserva caracteres Unicode y aplica límites", () => {
-  assert.equal(isValidPassword("🔒".repeat(15), 15), true);
-  assert.equal(isValidPassword("🔒".repeat(14), 15), false);
+  assert.equal(isValidPassword("🔒".repeat(8), minimumNewPasswordLength), true);
+  assert.equal(isValidPassword("🔒".repeat(7), minimumNewPasswordLength), false);
   assert.equal(isValidPassword("x".repeat(257)), false);
   assert.equal(isValidPassword("\ud800"), false);
 });

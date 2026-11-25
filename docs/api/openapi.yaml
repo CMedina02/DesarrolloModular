@@ -1163,7 +1163,7 @@ components:
           type: boolean
         password:
           type: string
-          minLength: 15
+          minLength: 8
           maxLength: 256
           writeOnly: true
     UserUpdate:

@@ -11,14 +11,19 @@ Repositorio para una plataforma modular orientada a pequeños comercios. El prim
 
 ## Arranque web local
 
-Prepara primero PostgreSQL y la configuración del backend con la guía de
-instalación de abajo. Desde la raíz del repositorio, compila el cliente y
+Con Flutter en el `PATH`, PostgreSQL en ejecución y el backend configurado,
+ejecuta este comando desde la raíz del repositorio. Compila el cliente y
 arranca Express en modo web.
 
 ```bash
-(cd mobile && flutter pub get && flutter build web --no-web-resources-cdn)
-(cd backend && npm run start:web)
+bash scripts/start-web.sh
 ```
+
+Para la primera instalación con una base vacía, crea la base y prepara
+`backend/.env` según la guía de instalación. Después ejecuta
+`bash scripts/start-web.sh --setup` para instalar las dependencias del backend,
+aplicar las migraciones y arrancar la web. Crea el primer administrador desde
+otra terminal siguiendo la guía B03.
 
 Abre [la aplicación](http://127.0.0.1:3000). Express sirve Flutter y la API
 desde la misma dirección. Para publicar este modo web, usa HTTPS en el
